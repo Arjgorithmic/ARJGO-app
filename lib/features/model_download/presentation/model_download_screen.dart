@@ -1,5 +1,5 @@
-import 'dart:async';
 import 'package:arjgo/core/providers/auth_provider.dart';
+import 'package:arjgo/core/services/model_download_service.dart';
 import 'package:arjgo/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,54 +14,69 @@ class ModelDownloadScreen extends ConsumerStatefulWidget {
 }
 
 class _ModelDownloadScreenState extends ConsumerState<ModelDownloadScreen> {
-  double _progress = 0.0;
-  bool _done = false;
-  Timer? _timer;
+  final ModelDownloadService _downloadService = ModelDownloadService();
+  bool _downloading = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _startSimulatedDownload();
+    _checkAndStartDownload();
   }
 
-  void _startSimulatedDownload() {
-    // Simulate a realistic download: fast at start, slower in middle, quick at end
-    const totalMs = 12000; // 12s total
-    const tickMs = 80;
-    final ticks = totalMs ~/ tickMs;
-    int currentTick = 0;
+  Future<void> _checkAndStartDownload() async {
+    final isDownloaded = await _downloadService.isModelDownloaded();
+    if (isDownloaded) {
+      final path = await _downloadService.getModelPath();
+      if (mounted) {
+        ref.read(authProvider.notifier).setModelDownloaded(path);
+      }
+      return;
+    }
 
-    _timer = Timer.periodic(const Duration(milliseconds: tickMs), (t) {
-      currentTick++;
-      final frac = currentTick / ticks;
-      // Ease-in-out-like curve
-      final eased = frac < 0.5
-          ? 2 * frac * frac
-          : 1 - 2 * (1 - frac) * (1 - frac);
+    _startRealDownload();
+  }
 
-      setState(() => _progress = (eased).clamp(0.0, 1.0));
+  Future<void> _startRealDownload() async {
+    if (_downloading) return;
+    setState(() {
+      _downloading = true;
+      _error = null;
+    });
 
-      if (currentTick >= ticks) {
-        t.cancel();
-        setState(() { _progress = 1.0; _done = true; });
-        Future.delayed(const Duration(milliseconds: 800), () {
+    try {
+      final path = await _downloadService.downloadModel(
+        onProgress: (progress) {
           if (mounted) {
-            ref.read(authProvider.notifier).setModelDownloaded();
+            ref.read(authProvider.notifier).updateDownloadProgress(progress);
           }
+        },
+      );
+      if (mounted) {
+        ref.read(authProvider.notifier).setModelDownloaded(path);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _downloading = false;
+          _error = 'Download failed: ${e.toString()}';
         });
       }
-    });
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final percentage = (_progress * 100).round();
+    final authState = ref.watch(authProvider);
+    final progress = authState.downloadProgress;
+    final percentage = (progress * 100).round();
+    final isDone = authState.isModelDownloaded;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
@@ -114,7 +129,7 @@ class _ModelDownloadScreenState extends ConsumerState<ModelDownloadScreen> {
                       duration: const Duration(milliseconds: 400),
                       curve: Curves.linear,
                       height: 1,
-                      width: constraints.maxWidth * _progress,
+                      width: constraints.maxWidth * progress,
                       color: AppColors.accent,
                     ),
                   ],
@@ -150,7 +165,22 @@ class _ModelDownloadScreenState extends ConsumerState<ModelDownloadScreen> {
                 ],
               ),
 
-              if (_done) ...[
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 11,
+                    color: Colors.red.shade700,
+                  ),
+                ),
+                TextButton(
+                  onPressed: _startRealDownload,
+                  child: const Text('RETRY'),
+                ),
+              ],
+
+              if (isDone) ...[
                 const SizedBox(height: 8),
                 Text(
                   'Model ready.',

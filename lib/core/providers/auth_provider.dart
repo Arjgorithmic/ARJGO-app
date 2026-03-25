@@ -1,5 +1,7 @@
+import 'package:arjgo/core/providers/auth_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 
 class AuthState {
   final bool isLoggedIn;
@@ -7,6 +9,8 @@ class AuthState {
   final String userName;
   final String userEmail;
   final DateTime? registeredAt;
+  final double downloadProgress;
+  final String? localModelPath;
 
   const AuthState({
     this.isLoggedIn = false,
@@ -14,6 +18,8 @@ class AuthState {
     this.userName = '',
     this.userEmail = '',
     this.registeredAt,
+    this.downloadProgress = 0.0,
+    this.localModelPath,
   });
 
   AuthState copyWith({
@@ -22,6 +28,8 @@ class AuthState {
     String? userName,
     String? userEmail,
     DateTime? registeredAt,
+    double? downloadProgress,
+    String? localModelPath,
   }) {
     return AuthState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
@@ -29,31 +37,55 @@ class AuthState {
       userName: userName ?? this.userName,
       userEmail: userEmail ?? this.userEmail,
       registeredAt: registeredAt ?? this.registeredAt,
+      downloadProgress: downloadProgress ?? this.downloadProgress,
+      localModelPath: localModelPath ?? this.localModelPath,
     );
   }
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier() : super(const AuthState()) {
-    _loadFromPrefs();
+    _init();
   }
 
-  Future<void> _loadFromPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-    final isModelDownloaded = prefs.getBool('isModelDownloaded') ?? false;
-    final userName = prefs.getString('userName') ?? '';
-    final userEmail = prefs.getString('userEmail') ?? '';
-    final registeredMs = prefs.getInt('registeredAt');
+  void _init() {
+    final session = sb.Supabase.instance.client.auth.currentSession;
+    if (session != null) {
+      _loadUser(session.user);
+    }
 
-    state = AuthState(
-      isLoggedIn: isLoggedIn,
-      isModelDownloaded: isModelDownloaded,
-      userName: userName,
-      userEmail: userEmail,
-      registeredAt: registeredMs != null
-          ? DateTime.fromMillisecondsSinceEpoch(registeredMs)
-          : null,
+    sb.Supabase.instance.client.auth.onAuthStateChange.listen((data) {
+      final user = data.session?.user;
+      if (user != null) {
+        _loadUser(user);
+      } else {
+        state = state.copyWith(isLoggedIn: false, userName: '', userEmail: '');
+      }
+    });
+
+    _loadLocalFlags();
+  }
+
+  Future<void> _loadUser(sb.User user) async {
+    final name = user.userMetadata?['full_name'] as String? ?? 'User';
+    final email = user.email ?? '';
+    final registeredAt = DateTime.tryParse(user.createdAt);
+
+    state = state.copyWith(
+      isLoggedIn: true,
+      userName: name,
+      userEmail: email,
+      registeredAt: registeredAt,
+    );
+  }
+
+  Future<void> _loadLocalFlags() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isDownloaded = prefs.getBool('isModelDownloaded') ?? false;
+    final modelPath = prefs.getString('localModelPath');
+    state = state.copyWith(
+      isModelDownloaded: isDownloaded,
+      localModelPath: modelPath,
     );
   }
 
@@ -62,21 +94,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String email,
     required String password,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final now = DateTime.now();
-
-    await prefs.setBool('isLoggedIn', true);
-    await prefs.setString('userName', name);
-    await prefs.setString('userEmail', email);
-    await prefs.setString('userPassword', password);
-    await prefs.setInt('registeredAt', now.millisecondsSinceEpoch);
-
-    state = AuthState(
-      isLoggedIn: true,
-      isModelDownloaded: false,
-      userName: name,
-      userEmail: email,
-      registeredAt: now,
+    await sb.Supabase.instance.client.auth.signUp(
+      email: email,
+      password: password,
+      data: {'full_name': name},
     );
   }
 
@@ -84,39 +105,25 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required String email,
     required String password,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final storedEmail = prefs.getString('userEmail') ?? '';
-    final storedPassword = prefs.getString('userPassword') ?? '';
-    final storedName = prefs.getString('userName') ?? '';
-    final isModelDownloaded = prefs.getBool('isModelDownloaded') ?? false;
-    final registeredMs = prefs.getInt('registeredAt');
-
-    if (storedEmail == email && storedPassword == password) {
-      await prefs.setBool('isLoggedIn', true);
-      state = AuthState(
-        isLoggedIn: true,
-        isModelDownloaded: isModelDownloaded,
-        userName: storedName,
-        userEmail: email,
-        registeredAt: registeredMs != null
-            ? DateTime.fromMillisecondsSinceEpoch(registeredMs)
-            : null,
-      );
-    } else {
-      throw Exception('Invalid credentials. Please check your email and password.');
-    }
+    await sb.Supabase.instance.client.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
   }
 
-  Future<void> setModelDownloaded() async {
+  Future<void> setModelDownloaded(String path) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isModelDownloaded', true);
-    state = state.copyWith(isModelDownloaded: true);
+    await prefs.setString('localModelPath', path);
+    state = state.copyWith(isModelDownloaded: true, localModelPath: path);
+  }
+
+  void updateDownloadProgress(double progress) {
+    state = state.copyWith(downloadProgress: progress);
   }
 
   Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isLoggedIn', false);
-    state = state.copyWith(isLoggedIn: false);
+    await sb.Supabase.instance.client.auth.signOut();
   }
 }
 

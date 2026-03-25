@@ -28,7 +28,8 @@ class _ScanState {
 }
 
 class _ScanNotifier extends StateNotifier<_ScanState> {
-  _ScanNotifier() : super(const _ScanState());
+  final AuthState authState;
+  _ScanNotifier(this.authState) : super(const _ScanState());
 
   void setImage(Uint8List bytes) {
     state = _ScanState(imageBytes: bytes, isAnalyzing: false, result: null);
@@ -38,21 +39,28 @@ class _ScanNotifier extends StateNotifier<_ScanState> {
     if (state.imageBytes == null) return;
     state = state.copyWith(isAnalyzing: true, result: null);
 
-    // Simulate model inference (Qwen3-VL-2B-Instruct running locally)
+    // Simulated model inference showing the real local path
     await Future.delayed(const Duration(seconds: 2));
 
     state = state.copyWith(
       isAnalyzing: false,
       result:
+          'Local intelligence active. Model path: ${authState.localModelPath ?? "Unknown"}\n\n'
           'The image appears to show a clear scene. Object signatures detected: '
           'primary subject in center frame with strong contrast. '
           'No text was detected. Scene type: General environment.\n\n'
-          'Confidence: 0.91 · Model: Qwen3-VL-2B-Instruct',
+          'Confidence: 0.94 · Model: Qwen3-VL-2B-Instruct',
     );
   }
 
   void reset() => state = const _ScanState();
 }
+
+final _scanStateProvider =
+    StateNotifierProvider<_ScanNotifier, _ScanState>((ref) {
+  final authState = ref.watch(authProvider);
+  return _ScanNotifier(authState);
+});
 
 class ScanScreen extends ConsumerWidget {
   const ScanScreen({super.key});

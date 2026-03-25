@@ -18,6 +18,13 @@ dependencies:
 
   # Storage
   shared_preferences: ^2.2.3
+  path_provider: ^2.1.2
+
+  # Supabase (Auth)
+  supabase_flutter: ^2.5.0
+
+  # HTTP/Downloading
+  dio: ^5.4.1
 
   # Typography
   google_fonts: ^6.2.1
