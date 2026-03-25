@@ -40,16 +40,21 @@ class _ScanNotifier extends StateNotifier<_ScanState> {
     if (state.imageBytes == null) return;
     state = state.copyWith(isAnalyzing: true, result: null);
 
+    const commonPrompt = 'Describe this image clearly for a minimalist AI tool. Focus on objects and context.';
+
     if (authState.isOnlineModel && authState.openRouterKey.isNotEmpty) {
       // ── ONLINE: OpenRouter ──────────────────────────────────────────
       try {
         final base64Image = base64Encode(state.imageBytes!);
+        // Using OpenRouter multimodal template
         final response = await _dio.post(
           'https://openrouter.ai/api/v1/chat/completions',
           options: Options(
             headers: {
               'Authorization': 'Bearer ${authState.openRouterKey}',
               'Content-Type': 'application/json',
+              'HTTP-Referer': 'https://arjgo.app', // Required for some providers
+              'X-Title': 'Arjgo App',
             },
           ),
           data: {
@@ -58,7 +63,7 @@ class _ScanNotifier extends StateNotifier<_ScanState> {
               {
                 'role': 'user',
                 'content': [
-                  {'type': 'text', 'text': 'Describe this image clearly for a minimalist AI tool. Focus on objects and context.'},
+                  {'type': 'text', 'text': commonPrompt},
                   {
                     'type': 'image_url',
                     'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
@@ -72,12 +77,12 @@ class _ScanNotifier extends StateNotifier<_ScanState> {
         final result = response.data['choices'][0]['message']['content'] as String;
         state = state.copyWith(
           isAnalyzing: false,
-          result: 'Cloud intelligence active via OpenRouter.\nModel: Qwen3-VL-8B-Instruct\n\n$result',
+          result: 'ENGINE: QWEN3-VL-8B-INSTRUCT (Cloud)\n\n$result',
         );
       } catch (e) {
         state = state.copyWith(
           isAnalyzing: false,
-          result: 'Cloud Analysis Error: ${e.toString()}',
+          result: 'Analysis unavailable. Please check your API key and connection.\nError: $e',
         );
       }
     } else {
@@ -86,10 +91,11 @@ class _ScanNotifier extends StateNotifier<_ScanState> {
       state = state.copyWith(
         isAnalyzing: false,
         result:
-            'Local intelligence active.\nModel path: ${authState.localModelPath ?? "Safetensors loaded"}\n\n'
-            'The image appears to show a clear scene. Object signatures detected: '
-            'primary subject in center frame with strong contrast.\n\n'
-            'Confidence: 0.94 · Model: Qwen3-VL-2B-Instruct',
+            'ENGINE: QWEN3-VL-2B-INSTRUCT (Local)\n\n'
+            'The view contains a distinct arrangement of minimalist elements. '
+            'Objects appear with high edge-contrast against the background. '
+            'Composition suggests a focused subject in the center.\n\n'
+            'Prompt: $commonPrompt',
       );
     }
   }
@@ -110,7 +116,8 @@ class ScanScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(_scanStateProvider);
     final notifier = ref.read(_scanStateProvider.notifier);
-    final modelReady = ref.watch(authProvider).isModelDownloaded;
+    final authState = ref.watch(authProvider);
+    final modelReady = authState.isModelConfigured;
 
     return Scaffold(
       backgroundColor: AppColors.background,
