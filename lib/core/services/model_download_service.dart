@@ -6,13 +6,13 @@ class ModelDownloadService {
   final Dio _dio = Dio();
 
   static const String modelUrl =
-      'https://huggingface.co/bartowski/Qwen_Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3-VL-2B-Instruct-Q4_K_M.gguf';
+      'https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct/resolve/main/model.safetensors';
 
   Future<String> downloadModel({
     required Function(double progress) onProgress,
   }) async {
     final directory = await getApplicationDocumentsDirectory();
-    final filePath = '${directory.path}/qwen3_vl_model.gguf';
+    final filePath = '${directory.path}/model.safetensors';
 
     await _dio.download(
       modelUrl,
@@ -29,12 +29,12 @@ class ModelDownloadService {
 
   Future<bool> isModelDownloaded() async {
     final directory = await getApplicationDocumentsDirectory();
-    final filePath = '${directory.path}/qwen3_vl_model.gguf';
+    final filePath = '${directory.path}/model.safetensors';
     return File(filePath).exists();
   }
 
   Future<String> getModelPath() async {
     final directory = await getApplicationDocumentsDirectory();
-    return '${directory.path}/qwen3_vl_model.gguf';
+    return '${directory.path}/model.safetensors';
   }
 }

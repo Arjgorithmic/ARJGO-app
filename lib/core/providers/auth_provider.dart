@@ -1,3 +1,4 @@
+import 'package:arjgo/core/services/model_download_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -80,13 +81,23 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _loadLocalFlags() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isDownloaded = prefs.getBool('isModelDownloaded') ?? false;
-    final modelPath = prefs.getString('localModelPath');
-    state = state.copyWith(
-      isModelDownloaded: isDownloaded,
-      localModelPath: modelPath,
-    );
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isDownloaded = prefs.getBool('isModelDownloaded') ?? false;
+      final modelPath = prefs.getString('localModelPath');
+
+      // Also check filesystem directly for robustness
+      final modelService = ModelDownloadService();
+      final fileExists = await modelService.isModelDownloaded();
+      final actualPath = await modelService.getModelPath();
+
+      state = state.copyWith(
+        isModelDownloaded: isDownloaded || fileExists,
+        localModelPath: modelPath ?? (fileExists ? actualPath : null),
+      );
+    } catch (e) {
+      debugPrint('Error loading local flags: $e');
+    }
   }
 
   Future<void> register({
