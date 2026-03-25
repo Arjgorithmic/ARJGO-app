@@ -58,6 +58,7 @@ class ArjgoLogoInline extends StatelessWidget {
 
 class ArjgoTextField extends StatelessWidget {
   final String label;
+  final String? hint;
   final bool obscureText;
   final TextEditingController controller;
   final TextInputType keyboardType;
@@ -67,6 +68,7 @@ class ArjgoTextField extends StatelessWidget {
     super.key,
     required this.label,
     required this.controller,
+    this.hint,
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
     this.validator,
@@ -86,6 +88,7 @@ class ArjgoTextField extends StatelessWidget {
       ),
       decoration: InputDecoration(
         labelText: label.toUpperCase(),
+        hintText: hint,
       ),
     );
   }
