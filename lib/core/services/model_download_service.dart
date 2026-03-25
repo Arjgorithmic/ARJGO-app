@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 class ModelDownloadService {
@@ -19,7 +20,13 @@ class ModelDownloadService {
       filePath,
       onReceiveProgress: (received, total) {
         if (total != -1) {
-          onProgress(received / total);
+          final p = received / total;
+          onProgress(p);
+          if (received % (1024 * 1024) == 0) { // Log every MB
+             debugPrint('Download progress: ${(p * 100).toStringAsFixed(2)}% ($received bytes)');
+          }
+        } else {
+          debugPrint('Download received: $received bytes (Total size unknown)');
         }
       },
     );

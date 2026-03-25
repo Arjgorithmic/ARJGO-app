@@ -74,7 +74,7 @@ class _ModelDownloadScreenState extends ConsumerState<ModelDownloadScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final progress = authState.downloadProgress;
-    final percentage = (progress * 100).round();
+    final percentageStr = (progress * 100).toStringAsFixed(2);
     final isDone = authState.isModelDownloaded;
 
     return Scaffold(
@@ -129,7 +129,7 @@ class _ModelDownloadScreenState extends ConsumerState<ModelDownloadScreen> {
                       duration: const Duration(milliseconds: 400),
                       curve: Curves.linear,
                       height: 1,
-                      width: constraints.maxWidth * progress,
+                      width: constraints.maxWidth * progress.clamp(0.0, 1.0),
                       color: AppColors.accent,
                     ),
                   ],
@@ -138,21 +138,23 @@ class _ModelDownloadScreenState extends ConsumerState<ModelDownloadScreen> {
 
               const SizedBox(height: 20),
 
-              // Percentage
+              // Percentage with decimals
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text(
-                    '$percentage',
+                    percentageStr,
                     style: GoogleFonts.dmSans(
-                      fontSize: 72,
+                      fontSize: 48, // Reduced slightly to fit decimals comfortably
                       fontWeight: FontWeight.w100,
                       color: AppColors.text,
                       height: 1.0,
                     ),
                   ),
+                  const SizedBox(width: 4),
                   Padding(
-                    padding: const EdgeInsets.only(top: 12),
+                    padding: const EdgeInsets.only(bottom: 6),
                     child: Text(
                       '%',
                       style: GoogleFonts.dmSans(
