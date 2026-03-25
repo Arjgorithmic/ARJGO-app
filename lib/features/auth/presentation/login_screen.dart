@@ -45,7 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -140,7 +140,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       style: GoogleFonts.dmSans(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.text,
+                        color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
                         letterSpacing: 0.3,
                         decoration: TextDecoration.underline,
                         decorationColor: AppColors.divider,
@@ -163,20 +163,25 @@ class _SplashIllustration extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      size: const Size(240, 240),
-      painter: _BotanicalPainter(),
+      size: const Size(200, 200),
+      painter: _BotanicalPainter(
+        color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text,
+      ),
     );
   }
 }
 
 class _BotanicalPainter extends CustomPainter {
+  final Color color;
+  _BotanicalPainter({required this.color});
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = AppColors.text.withOpacity(0.08)
+      ..color = color.withOpacity(0.08)
       ..style = PaintingStyle.fill;
     final strokePaint = Paint()
-      ..color = AppColors.text.withOpacity(0.12)
+      ..color = color.withOpacity(0.12)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
       ..strokeCap = StrokeCap.round;
@@ -206,7 +211,7 @@ class _BotanicalPainter extends CustomPainter {
 
     // Stem line
     final stemPaint = Paint()
-      ..color = AppColors.text.withOpacity(0.15)
+      ..color = color.withOpacity(0.15)
       ..strokeWidth = 1.0
       ..style = PaintingStyle.stroke;
     final path = Path()

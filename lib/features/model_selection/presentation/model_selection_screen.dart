@@ -42,7 +42,7 @@ class _ModelSelectionScreenState extends ConsumerState<ModelSelectionScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -56,7 +56,7 @@ class _ModelSelectionScreenState extends ConsumerState<ModelSelectionScreen> {
                 style: GoogleFonts.dmSans(
                   fontSize: 32,
                   fontWeight: FontWeight.w200,
-                  color: AppColors.text,
+                  color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
                   height: 1.15,
                 ),
               ),

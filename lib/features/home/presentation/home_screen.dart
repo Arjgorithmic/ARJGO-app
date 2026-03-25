@@ -4,6 +4,7 @@ import 'package:arjgo/shared/widgets/arjgo_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -24,7 +25,7 @@ class HomeScreen extends ConsumerWidget {
         : 'AR';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -63,7 +64,7 @@ class HomeScreen extends ConsumerWidget {
                 style: GoogleFonts.dmSans(
                   fontSize: 40,
                   fontWeight: FontWeight.w200,
-                  color: AppColors.text,
+                  color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
                   height: 1.1,
                 ),
               ),
@@ -146,7 +147,7 @@ class HomeScreen extends ConsumerWidget {
                         style: GoogleFonts.dmSans(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color: AppColors.text,
+                          color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
                         ),
                       ),
                       Text(
@@ -201,7 +202,7 @@ class HomeScreen extends ConsumerWidget {
                 style: GoogleFonts.dmSans(
                   fontSize: 15,
                   fontWeight: FontWeight.w300,
-                  color: AppColors.text,
+                  color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
                 ),
               ),
             ),
@@ -216,7 +217,7 @@ class HomeScreen extends ConsumerWidget {
                 style: GoogleFonts.dmSans(
                   fontSize: 15,
                   fontWeight: FontWeight.w300,
-                  color: AppColors.text,
+                  color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
                 ),
               ),
             ),

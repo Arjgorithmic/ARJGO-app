@@ -12,149 +12,65 @@ abstract class AppColors {
 }
 
 abstract class AppTheme {
-  static ThemeData get light => ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: AppColors.background,
-        colorScheme: const ColorScheme.light(
-          primary: AppColors.accent,
-          onPrimary: AppColors.white,
-          surface: AppColors.background,
-          onSurface: AppColors.text,
-        ),
-        textTheme: _textTheme,
-        appBarTheme: AppBarTheme(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          iconTheme: const IconThemeData(color: AppColors.text),
-          titleTextStyle: GoogleFonts.dmSans(
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-            color: AppColors.text,
-            letterSpacing: 0.5,
-          ),
-        ),
-        dividerTheme: const DividerThemeData(
-          color: AppColors.divider,
-          thickness: 1,
-          space: 1,
-        ),
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: AppColors.white,
-          elevation: 0,
-          selectedItemColor: AppColors.accent,
-          unselectedItemColor: AppColors.grey,
-          selectedLabelStyle: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 1.4,
-          ),
-          unselectedLabelStyle: TextStyle(
-            fontSize: 9,
-            fontWeight: FontWeight.w400,
-            letterSpacing: 1.4,
-          ),
-          showSelectedLabels: true,
-          showUnselectedLabels: true,
-        ),
-        inputDecorationTheme: InputDecorationTheme(
-          filled: false,
-          border: const UnderlineInputBorder(
-            borderSide: BorderSide(color: AppColors.divider, width: 1),
-          ),
-          enabledBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: AppColors.divider, width: 1),
-          ),
-          focusedBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: AppColors.accent, width: 1.5),
-          ),
-          labelStyle: GoogleFonts.dmSans(
-            fontSize: 12,
-            color: AppColors.grey,
-            letterSpacing: 1.2,
-            fontWeight: FontWeight.w400,
-          ),
-          hintStyle: GoogleFonts.dmSans(
-            fontSize: 14,
-            color: AppColors.greyLight,
-            fontWeight: FontWeight.w300,
-          ),
-          contentPadding:
-              const EdgeInsets.symmetric(vertical: 12, horizontal: 0),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accent,
-            foregroundColor: AppColors.white,
-            elevation: 0,
-            shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-            textStyle: GoogleFonts.dmSans(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.5,
-            ),
-          ),
-        ),
-      );
+  static ThemeData get light => _buildTheme(Brightness.light);
+  static ThemeData get dark => _buildTheme(Brightness.dark);
 
-  static TextTheme get _textTheme => TextTheme(
-        displayLarge: GoogleFonts.dmSans(
-          fontSize: 56,
-          fontWeight: FontWeight.w100,
-          color: AppColors.text,
-          letterSpacing: -1,
-        ),
-        displayMedium: GoogleFonts.dmSans(
-          fontSize: 40,
-          fontWeight: FontWeight.w200,
-          color: AppColors.text,
-          letterSpacing: -0.5,
-        ),
-        headlineLarge: GoogleFonts.dmSans(
-          fontSize: 32,
-          fontWeight: FontWeight.w200,
-          color: AppColors.text,
-        ),
-        headlineMedium: GoogleFonts.dmSans(
-          fontSize: 24,
-          fontWeight: FontWeight.w300,
-          color: AppColors.text,
-        ),
-        titleLarge: GoogleFonts.dmSans(
-          fontSize: 18,
+  static ThemeData _buildTheme(Brightness brightness) {
+    final isDark = brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF0A0A0A) : AppColors.background;
+    final card = isDark ? const Color(0xFF141414) : AppColors.white;
+    final text = isDark ? AppColors.white : AppColors.text;
+    final divider = isDark ? const Color(0xFF1E1E1E) : AppColors.divider;
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      scaffoldBackgroundColor: bg,
+      cardColor: card,
+      colorScheme: ColorScheme(
+        brightness: brightness,
+        primary: AppColors.accent,
+        onPrimary: AppColors.white,
+        secondary: AppColors.accent,
+        onSecondary: AppColors.white,
+        error: Colors.red,
+        onError: AppColors.white,
+        background: bg,
+        onBackground: text,
+        surface: card,
+        onSurface: text,
+      ),
+      textTheme: _textTheme(text),
+      dividerTheme: DividerThemeData(color: divider, thickness: 1, space: 1),
+      appBarTheme: AppBarTheme(
+        backgroundColor: bg,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: IconThemeData(color: text),
+        titleTextStyle: GoogleFonts.dmSans(
+          fontSize: 16,
           fontWeight: FontWeight.w500,
-          color: AppColors.text,
-          letterSpacing: 0.3,
+          color: text,
+          letterSpacing: 0.5,
         ),
-        titleMedium: GoogleFonts.dmSans(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: AppColors.text,
-          letterSpacing: 0.2,
-        ),
-        bodyLarge: GoogleFonts.dmSans(
-          fontSize: 15,
-          fontWeight: FontWeight.w300,
-          color: AppColors.text,
-        ),
-        bodyMedium: GoogleFonts.dmSans(
-          fontSize: 13,
-          fontWeight: FontWeight.w300,
-          color: AppColors.text,
-        ),
-        bodySmall: GoogleFonts.dmSans(
-          fontSize: 11,
-          fontWeight: FontWeight.w400,
-          color: AppColors.grey,
-          letterSpacing: 1.2,
-        ),
-        labelSmall: GoogleFonts.dmSans(
-          fontSize: 9,
-          fontWeight: FontWeight.w500,
-          color: AppColors.grey,
-          letterSpacing: 1.8,
-        ),
+      ),
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
+        backgroundColor: card,
+        elevation: 0,
+        selectedItemColor: AppColors.accent,
+        unselectedItemColor: AppColors.grey,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
+      ),
+    );
+  }
+
+  static TextTheme _textTheme(Color color) => TextTheme(
+        headlineLarge: GoogleFonts.dmSans(fontSize: 32, fontWeight: FontWeight.w200, color: color),
+        headlineMedium: GoogleFonts.dmSans(fontSize: 24, fontWeight: FontWeight.w300, color: color),
+        titleLarge: GoogleFonts.dmSans(fontSize: 18, fontWeight: FontWeight.w500, color: color),
+        bodyLarge: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w300, color: color),
+        bodyMedium: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w300, color: color),
+        labelSmall: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w500, color: AppColors.grey, letterSpacing: 2),
       );
 }

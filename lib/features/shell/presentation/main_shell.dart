@@ -16,7 +16,7 @@ class MainShell extends ConsumerWidget {
     final index = ref.watch(_shellIndexProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: child,
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(

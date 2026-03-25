@@ -12,8 +12,13 @@ import 'package:path_provider/path_provider.dart';
 class Skill {
   final String name;
   final String description;
+  final bool isLocal;
 
-  const Skill({required this.name, required this.description});
+  const Skill({
+    required this.name,
+    required this.description,
+    this.isLocal = false,
+  });
 }
 
 // ── Provider ─────────────────────────────────────────────────────────────────
@@ -44,7 +49,8 @@ class SkillsNotifier extends AsyncNotifier<List<Skill>> {
     for (final line in lines) {
       if (line.startsWith('## ')) {
         if (currentName != null) {
-          skills.add(Skill(name: currentName, description: descBuf.toString().trim()));
+          skills.add(Skill(
+              name: currentName, description: descBuf.toString().trim()));
           descBuf.clear();
         }
         currentName = line.substring(3).trim();
@@ -54,14 +60,22 @@ class SkillsNotifier extends AsyncNotifier<List<Skill>> {
       }
     }
     if (currentName != null) {
-      skills.add(Skill(name: currentName, description: descBuf.toString().trim()));
+      skills.add(
+          Skill(name: currentName, description: descBuf.toString().trim()));
     }
     return skills;
   }
 
-  Future<void> addSkill({required String name, required String description}) async {
+  Future<void> addSkill(
+      {required String name, required String description}) async {
     final current = state.valueOrNull ?? [];
-    state = AsyncData([...current, Skill(name: name, description: description)]);
+    state = AsyncData(
+        [...current, Skill(name: name, description: description, isLocal: true)]);
+  }
+
+  Future<void> deleteSkill(String name) async {
+    final current = state.valueOrNull ?? [];
+    state = AsyncData(current.where((s) => s.name != name).toList());
   }
 
   Future<bool> addSkillFromZip() async {
@@ -93,11 +107,14 @@ class SkillsNotifier extends AsyncNotifier<List<Skill>> {
         }
       }
 
-      // Add to list
       final current = state.valueOrNull ?? [];
       state = AsyncData([
         ...current,
-        Skill(name: skillName, description: 'Imported skill package (${archive.length} files)'),
+        Skill(
+          name: skillName,
+          description: 'Imported package (${archive.length} files)',
+          isLocal: true,
+        ),
       ]);
       return true;
     } catch (e) {
@@ -124,108 +141,60 @@ class SkillsScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 24),
-
-              // Header
               Text(
                 'Skills',
                 style: GoogleFonts.dmSans(
                   fontSize: 36,
                   fontWeight: FontWeight.w200,
-                  color: Theme.of(context).textTheme.headlineMedium?.color,
+                  color: Theme.of(context).textTheme.headlineLarge?.color,
                 ),
               ),
               const SizedBox(height: 4),
-              Row(
-                children: [
-                  Text(
-                    'YOUR LIBRARY',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.grey,
-                      letterSpacing: 2.5,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.archive_outlined, size: 20, color: AppColors.accent),
-                    onPressed: () async {
-                      final ok = await ref.read(skillsProvider.notifier).addSkillFromZip();
-                      if (context.mounted && ok) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Skill package imported')),
-                        );
-                      }
-                    },
-                  ),
-                ],
+              Text(
+                'YOUR LIBRARY',
+                style: GoogleFonts.dmSans(
+                  fontSize: 9,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.grey,
+                  letterSpacing: 2.5,
+                ),
               ),
-              const SizedBox(height: 16),
-
-              // List
+              const SizedBox(height: 32),
               Expanded(
                 child: skillsAsync.when(
                   loading: () => const Center(
-                    child: SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 1.2,
-                        color: AppColors.accent,
-                      ),
-                    ),
-                  ),
-                  error: (e, _) => Text('Failed to load skills.',
-                      style: GoogleFonts.dmSans(color: AppColors.grey)),
+                      child: CircularProgressIndicator(strokeWidth: 1)),
+                  error: (e, _) => const Text('Error loading skills'),
                   data: (skills) => skills.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'No skills yet.',
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w300,
-                                  color: AppColors.grey,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
+                      ? const Center(child: Text('No skills yet'))
                       : ListView.separated(
                           itemCount: skills.length,
                           separatorBuilder: (_, __) => const Divider(),
                           itemBuilder: (context, i) {
                             final skill = skills[i];
-                            return Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 14),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    skill.name,
-                                    style: GoogleFonts.dmSans(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w500,
-                                      color: Theme.of(context).textTheme.bodyLarge?.color,
-                                    ),
-                                  ),
-                                  if (skill.description.isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      skill.description,
-                                      style: GoogleFonts.dmSans(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w300,
-                                        color: AppColors.grey,
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                  ],
-                                ],
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(
+                                skill.name,
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              subtitle: Text(
+                                skill.description,
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w300,
+                                  color: AppColors.grey,
+                                ),
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 18, color: Colors.redAccent),
+                                onPressed: () => ref
+                                    .read(skillsProvider.notifier)
+                                    .deleteSkill(skill.name),
                               ),
                             );
                           },
@@ -236,7 +205,6 @@ class SkillsScreen extends ConsumerWidget {
           ),
         ),
       ),
-
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 72, right: 8),
         child: GestureDetector(
@@ -277,58 +245,83 @@ class SkillsScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'ADD SKILL',
+              'NEW SKILL',
               style: GoogleFonts.dmSans(
                 fontSize: 10,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 color: AppColors.grey,
-                letterSpacing: 2.5,
+                letterSpacing: 2,
               ),
             ),
             const SizedBox(height: 24),
             TextField(
               controller: nameCtrl,
-              decoration: const InputDecoration(labelText: 'SKILL NAME'),
-              style: GoogleFonts.dmSans(
-                fontSize: 15,
-                fontWeight: FontWeight.w300,
-                color: Theme.of(ctx).textTheme.bodyLarge?.color,
-              ),
+              decoration: const InputDecoration(labelText: 'NAME'),
+              style: GoogleFonts.dmSans(fontSize: 15),
             ),
             const SizedBox(height: 20),
             TextField(
               controller: descCtrl,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'DESCRIPTION',
-                alignLabelWithHint: true,
-              ),
-              style: GoogleFonts.dmSans(
-                fontSize: 14,
-                fontWeight: FontWeight.w300,
-                color: Theme.of(ctx).textTheme.bodyLarge?.color,
-              ),
+              decoration: const InputDecoration(labelText: 'DESCRIPTION'),
+              style: GoogleFonts.dmSans(fontSize: 14),
             ),
             const SizedBox(height: 32),
-            GestureDetector(
-              onTap: () {
-                final name = nameCtrl.text.trim();
-                if (name.isEmpty) return;
-                ref.read(skillsProvider.notifier).addSkill(
-                      name: name,
-                      description: descCtrl.text.trim(),
-                    );
-                Navigator.pop(ctx);
-              },
-              child: Text(
-                'ADD',
-                style: GoogleFonts.dmSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.accent,
-                  letterSpacing: 2.5,
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () async {
+                      final ok = await ref
+                          .read(skillsProvider.notifier)
+                          .addSkillFromZip();
+                      if (ctx.mounted && ok) Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        'UPLOAD ZIP',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      if (nameCtrl.text.isNotEmpty) {
+                        ref.read(skillsProvider.notifier).addSkill(
+                              name: nameCtrl.text,
+                              description: descCtrl.text,
+                            );
+                        Navigator.pop(ctx);
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      color: AppColors.accent,
+                      alignment: Alignment.center,
+                      child: Text(
+                        'CREATE',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.white,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

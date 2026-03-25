@@ -84,7 +84,7 @@ class ArjgoTextField extends StatelessWidget {
       style: GoogleFonts.dmSans(
         fontSize: 15,
         fontWeight: FontWeight.w300,
-        color: AppColors.text,
+        color: Theme.of(context).textTheme.bodyLarge?.color,
       ),
       decoration: InputDecoration(
         labelText: label.toUpperCase(),

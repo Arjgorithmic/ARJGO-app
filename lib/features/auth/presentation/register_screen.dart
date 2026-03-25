@@ -48,7 +48,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -63,7 +63,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   style: GoogleFonts.dmSans(
                     fontSize: 36,
                     fontWeight: FontWeight.w200,
-                    color: AppColors.text,
+                    color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
                     height: 1.1,
                   ),
                 ),

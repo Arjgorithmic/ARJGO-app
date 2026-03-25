@@ -78,7 +78,7 @@ class _ModelDownloadScreenState extends ConsumerState<ModelDownloadScreen> {
     final isDone = authState.isModelDownloaded;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -98,7 +98,7 @@ class _ModelDownloadScreenState extends ConsumerState<ModelDownloadScreen> {
                 style: GoogleFonts.dmSans(
                   fontSize: 32,
                   fontWeight: FontWeight.w200,
-                  color: AppColors.text,
+                  color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
                   height: 1.15,
                 ),
               ),
@@ -148,7 +148,7 @@ class _ModelDownloadScreenState extends ConsumerState<ModelDownloadScreen> {
                     style: GoogleFonts.dmSans(
                       fontSize: 48, // Reduced slightly to fit decimals comfortably
                       fontWeight: FontWeight.w100,
-                      color: AppColors.text,
+                      color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
                       height: 1.0,
                     ),
                   ),

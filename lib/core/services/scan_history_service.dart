@@ -4,20 +4,20 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ScanResult {
   final String date;
   final String result;
-  final String imageUrl; // In actual app, this might be a local path
+  final String? imagePath;
 
-  ScanResult({required this.date, required this.result, required this.imageUrl});
+  ScanResult({required this.date, required this.result, this.imagePath});
 
   Map<String, dynamic> toJson() => {
         'date': date,
         'result': result,
-        'imageUrl': imageUrl,
+        'imagePath': imagePath,
       };
 
   factory ScanResult.fromJson(Map<String, dynamic> json) => ScanResult(
         date: json['date'],
         result: json['result'],
-        imageUrl: json['imageUrl'],
+        imagePath: json['imagePath'],
       );
 }
 
@@ -28,7 +28,7 @@ class ScanHistoryService {
     final prefs = await SharedPreferences.getInstance();
     final List<String> history = prefs.getStringList(_key) ?? [];
     history.insert(0, jsonEncode(result.toJson()));
-    if (history.length > 50) history.removeLast(); // Keep limit
+    if (history.length > 50) history.removeLast();
     await prefs.setStringList(_key, history);
   }
 
@@ -36,5 +36,15 @@ class ScanHistoryService {
     final prefs = await SharedPreferences.getInstance();
     final List<String> history = prefs.getStringList(_key) ?? [];
     return history.map((e) => ScanResult.fromJson(jsonDecode(e))).toList();
+  }
+
+  Future<void> deleteResult(String date) async {
+    final prefs = await SharedPreferences.getInstance();
+    final List<String> historyRaw = prefs.getStringList(_key) ?? [];
+    final List<String> updated = historyRaw.where((e) {
+      final item = ScanResult.fromJson(jsonDecode(e));
+      return item.date != date;
+    }).toList();
+    await prefs.setStringList(_key, updated);
   }
 }
