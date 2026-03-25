@@ -13,13 +13,15 @@ class ModelDownloadService {
     required Function(double progress) onProgress,
   }) async {
     if (kIsWeb) {
-      // Simulate real progress on Web for developer testing
-      // since direct Dio download to File isn't supported/CORS restricted
-      for (int i = 0; i <= 100; i++) {
-        await Future.delayed(const Duration(milliseconds: 150));
-        onProgress(i / 100.0);
+      // Mock download for web to allow testing UI and feature flow without CORS/storage bottlenecks
+      for (double i = 0; i <= 1.0; i += 0.0025) { // Faster steps for testing
+        await Future.delayed(const Duration(milliseconds: 15));
+        onProgress(i);
+        if ((i * 100) % 5 == 0) {
+           debugPrint('Web Mock Download: ${(i * 100).toStringAsFixed(2)}%');
+        }
       }
-      return 'web_simulated_path';
+      return 'web_simulated_model_path';
     }
 
     final directory = await getApplicationDocumentsDirectory();
@@ -32,7 +34,7 @@ class ModelDownloadService {
         if (total != -1) {
           final p = received / total;
           onProgress(p);
-          if (received % (1024 * 1024) == 0) {
+          if (received % (1024 * 1024) == 0) { // Log every MB
              debugPrint('Download progress: ${(p * 100).toStringAsFixed(2)}% ($received bytes)');
           }
         } else {
@@ -45,16 +47,17 @@ class ModelDownloadService {
   }
 
   Future<bool> isModelDownloaded() async {
-    if (kIsWeb) return false; // Web always simulates for now unless we use IDB
-
+    if (kIsWeb) {
+       // On web, we check SharedPreferences since there's no dart:io File
+       return false; // AuthNotifier handles the SharedPreferences check
+    }
     final directory = await getApplicationDocumentsDirectory();
     final filePath = '${directory.path}/model.safetensors';
     return File(filePath).exists();
   }
 
   Future<String> getModelPath() async {
-    if (kIsWeb) return 'web_simulated_path';
-
+    if (kIsWeb) return 'web_simulated_model_path';
     final directory = await getApplicationDocumentsDirectory();
     return '${directory.path}/model.safetensors';
   }
