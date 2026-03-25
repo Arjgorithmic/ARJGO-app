@@ -1,13 +1,10 @@
 import 'dart:typed_data';
+import 'package:arjgo/core/providers/auth_provider.dart';
+import 'package:arjgo/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:arjgo/core/theme/app_theme.dart';
-import 'package:arjgo/core/providers/auth_provider.dart';
-
-final _scanStateProvider =
-    StateNotifierProvider<_ScanNotifier, _ScanState>((ref) => _ScanNotifier());
 
 class _ScanState {
   final Uint8List? imageBytes;
