@@ -1,0 +1,61 @@
+name: arjgo
+description: "Arjgo — Your skills, seen clearly."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State management
+  flutter_riverpod: ^2.5.1
+
+  # Navigation
+  go_router: ^13.2.1
+
+  # Storage
+  shared_preferences: ^2.2.3
+
+  # Typography
+  google_fonts: ^6.2.1
+
+  # Image picking / camera
+  image_picker: ^1.1.2
+
+  # Markdown parsing (skill.md)
+  flutter_markdown: ^0.6.22
+
+  # Utilities
+  uuid: ^4.4.0
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/skills/skill.md
+    - assets/images/
+
+  # fonts:
+  #   - family: DMSans
+  #     fonts:
+  #       - asset: assets/fonts/DMSans-Thin.ttf
+  #         weight: 100
+  #       - asset: assets/fonts/DMSans-Light.ttf
+  #         weight: 300
+  #       - asset: assets/fonts/DMSans-Regular.ttf
+  #         weight: 400
+  #       - asset: assets/fonts/DMSans-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/DMSans-SemiBold.ttf
+  #         weight: 600
+  #       - asset: assets/fonts/DMSans-Bold.ttf
+  #         weight: 700
