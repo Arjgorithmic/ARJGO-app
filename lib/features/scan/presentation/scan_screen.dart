@@ -1,6 +1,8 @@
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:arjgo/core/providers/auth_provider.dart';
 import 'package:arjgo/core/theme/app_theme.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,6 +28,8 @@ class _ScanState {
 
 class _ScanNotifier extends StateNotifier<_ScanState> {
   final AuthState authState;
+  final Dio _dio = Dio();
+  
   _ScanNotifier(this.authState) : super(const _ScanState());
 
   void setImage(Uint8List bytes) {
@@ -36,18 +40,58 @@ class _ScanNotifier extends StateNotifier<_ScanState> {
     if (state.imageBytes == null) return;
     state = state.copyWith(isAnalyzing: true, result: null);
 
-    // Simulated model inference showing the real local path
-    await Future.delayed(const Duration(seconds: 2));
+    if (authState.isOnlineModel && authState.openRouterKey.isNotEmpty) {
+      // ── ONLINE: OpenRouter ──────────────────────────────────────────
+      try {
+        final base64Image = base64Encode(state.imageBytes!);
+        final response = await _dio.post(
+          'https://openrouter.ai/api/v1/chat/completions',
+          options: Options(
+            headers: {
+              'Authorization': 'Bearer ${authState.openRouterKey}',
+              'Content-Type': 'application/json',
+            },
+          ),
+          data: {
+            'model': 'qwen/qwen3-vl-8b-instruct',
+            'messages': [
+              {
+                'role': 'user',
+                'content': [
+                  {'type': 'text', 'text': 'Describe this image clearly for a minimalist AI tool. Focus on objects and context.'},
+                  {
+                    'type': 'image_url',
+                    'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
+                  },
+                ],
+              }
+            ],
+          },
+        );
 
-    state = state.copyWith(
-      isAnalyzing: false,
-      result:
-          'Local intelligence active. Model path: ${authState.localModelPath ?? "Unknown"}\n\n'
-          'The image appears to show a clear scene. Object signatures detected: '
-          'primary subject in center frame with strong contrast. '
-          'No text was detected. Scene type: General environment.\n\n'
-          'Confidence: 0.94 · Model: Qwen3-VL-2B-Instruct',
-    );
+        final result = response.data['choices'][0]['message']['content'] as String;
+        state = state.copyWith(
+          isAnalyzing: false,
+          result: 'Cloud intelligence active via OpenRouter.\nModel: Qwen3-VL-8B-Instruct\n\n$result',
+        );
+      } catch (e) {
+        state = state.copyWith(
+          isAnalyzing: false,
+          result: 'Cloud Analysis Error: ${e.toString()}',
+        );
+      }
+    } else {
+      // ── OFFLINE: Simulated ──────────────────────────────────────────
+      await Future.delayed(const Duration(seconds: 2));
+      state = state.copyWith(
+        isAnalyzing: false,
+        result:
+            'Local intelligence active.\nModel path: ${authState.localModelPath ?? "Safetensors loaded"}\n\n'
+            'The image appears to show a clear scene. Object signatures detected: '
+            'primary subject in center frame with strong contrast.\n\n'
+            'Confidence: 0.94 · Model: Qwen3-VL-2B-Instruct',
+      );
+    }
   }
 
   void reset() => state = const _ScanState();

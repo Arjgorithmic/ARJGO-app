@@ -9,6 +9,8 @@ import 'package:arjgo/features/home/presentation/home_screen.dart';
 import 'package:arjgo/features/scan/presentation/scan_screen.dart';
 import 'package:arjgo/features/skills/presentation/skills_screen.dart';
 
+import 'package:arjgo/features/model_selection/presentation/model_selection_screen.dart';
+
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
@@ -16,7 +18,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     redirect: (context, state) {
       final isLoggedIn = authState.isLoggedIn;
-      final isModelDownloaded = authState.isModelDownloaded;
+      final isModelConfigured = authState.isModelConfigured;
       final loc = state.uri.toString();
 
       if (!isLoggedIn) {
@@ -24,12 +26,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
-      if (!isModelDownloaded) {
-        if (loc != '/download') return '/download';
+      if (!isModelConfigured) {
+        if (loc != '/selection' && loc != '/download') return '/selection';
         return null;
       }
 
-      if (loc == '/login' || loc == '/register' || loc == '/download') {
+      if (loc == '/login' || loc == '/register' || loc == '/selection' || loc == '/download') {
         return '/home';
       }
       return null;
@@ -37,6 +39,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/register', builder: (_, __) => const RegisterScreen()),
+      GoRoute(path: '/selection', builder: (_, __) => const ModelSelectionScreen()),
       GoRoute(path: '/download', builder: (_, __) => const ModelDownloadScreen()),
       ShellRoute(
         builder: (context, state, child) => MainShell(child: child),

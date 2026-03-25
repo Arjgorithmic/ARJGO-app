@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart' as sb;
 class AuthState {
   final bool isLoggedIn;
   final bool isModelDownloaded;
+  final bool isOnlineModel;
+  final String openRouterKey;
   final String userName;
   final String userEmail;
   final DateTime? registeredAt;
@@ -16,6 +18,8 @@ class AuthState {
   const AuthState({
     this.isLoggedIn = false,
     this.isModelDownloaded = false,
+    this.isOnlineModel = false,
+    this.openRouterKey = '',
     this.userName = '',
     this.userEmail = '',
     this.registeredAt,
@@ -23,9 +27,13 @@ class AuthState {
     this.localModelPath,
   });
 
+  bool get isModelConfigured => isModelDownloaded || (isOnlineModel && openRouterKey.isNotEmpty);
+
   AuthState copyWith({
     bool? isLoggedIn,
     bool? isModelDownloaded,
+    bool? isOnlineModel,
+    String? openRouterKey,
     String? userName,
     String? userEmail,
     DateTime? registeredAt,
@@ -35,6 +43,8 @@ class AuthState {
     return AuthState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
       isModelDownloaded: isModelDownloaded ?? this.isModelDownloaded,
+      isOnlineModel: isOnlineModel ?? this.isOnlineModel,
+      openRouterKey: openRouterKey ?? this.openRouterKey,
       userName: userName ?? this.userName,
       userEmail: userEmail ?? this.userEmail,
       registeredAt: registeredAt ?? this.registeredAt,
@@ -85,19 +95,40 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final prefs = await SharedPreferences.getInstance();
       final isDownloaded = prefs.getBool('isModelDownloaded') ?? false;
       final modelPath = prefs.getString('localModelPath');
+      final isOnline = prefs.getBool('isOnlineModel') ?? false;
+      final apiKey = prefs.getString('openRouterKey') ?? '';
 
-      // Also check filesystem directly for robustness
-      final modelService = ModelDownloadService();
-      final fileExists = await modelService.isModelDownloaded();
-      final actualPath = await modelService.getModelPath();
+      // Also check filesystem directly for robustness (only if not already marked downloaded in prefs)
+      String? actualPath = modelPath;
+      bool fileExists = isDownloaded;
+      if (!isDownloaded) {
+        final modelService = ModelDownloadService();
+        fileExists = await modelService.isModelDownloaded();
+        actualPath = fileExists ? await modelService.getModelPath() : null;
+      }
 
       state = state.copyWith(
-        isModelDownloaded: isDownloaded || fileExists,
-        localModelPath: modelPath ?? (fileExists ? actualPath : null),
+        isModelDownloaded: fileExists,
+        localModelPath: actualPath,
+        isOnlineModel: isOnline,
+        openRouterKey: apiKey,
       );
     } catch (e) {
       debugPrint('Error loading local flags: $e');
     }
+  }
+
+  Future<void> setModelOffline() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isOnlineModel', false);
+    state = state.copyWith(isOnlineModel: false);
+  }
+
+  Future<void> setModelOnline(String apiKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isOnlineModel', true);
+    await prefs.setString('openRouterKey', apiKey);
+    state = state.copyWith(isOnlineModel: true, openRouterKey: apiKey);
   }
 
   Future<void> register({
