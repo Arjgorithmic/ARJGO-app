@@ -1,8 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'dart:io';
 import 'package:arjgo/core/theme/app_theme.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:archive/archive.dart';
+import 'package:path_provider/path_provider.dart';
 
 // ── Model ────────────────────────────────────────────────────────────────────
 class Skill {
@@ -59,6 +63,48 @@ class SkillsNotifier extends AsyncNotifier<List<Skill>> {
     final current = state.valueOrNull ?? [];
     state = AsyncData([...current, Skill(name: name, description: description)]);
   }
+
+  Future<bool> addSkillFromZip() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['zip'],
+      );
+
+      if (result == null || result.files.single.path == null) return false;
+
+      final file = File(result.files.single.path!);
+      final bytes = await file.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+
+      final appDir = await getApplicationDocumentsDirectory();
+      final skillName = result.files.single.name.split('.').first;
+      final skillDir = Directory('${appDir.path}/skills/$skillName');
+
+      if (!skillDir.existsSync()) skillDir.createSync(recursive: true);
+
+      for (final file in archive) {
+        final filename = file.name;
+        if (file.isFile) {
+          final data = file.content as List<int>;
+          File('${skillDir.path}/$filename')
+            ..createSync(recursive: true)
+            ..writeAsBytesSync(data);
+        }
+      }
+
+      // Add to list
+      final current = state.valueOrNull ?? [];
+      state = AsyncData([
+        ...current,
+        Skill(name: skillName, description: 'Imported skill package (${archive.length} files)'),
+      ]);
+      return true;
+    } catch (e) {
+      debugPrint('Error unzipping: $e');
+      return false;
+    }
+  }
 }
 
 // ── Screen ───────────────────────────────────────────────────────────────────
@@ -70,7 +116,7 @@ class SkillsScreen extends ConsumerWidget {
     final skillsAsync = ref.watch(skillsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -85,20 +131,36 @@ class SkillsScreen extends ConsumerWidget {
                 style: GoogleFonts.dmSans(
                   fontSize: 36,
                   fontWeight: FontWeight.w200,
-                  color: AppColors.text,
+                  color: Theme.of(context).textTheme.headlineMedium?.color,
                 ),
               ),
               const SizedBox(height: 4),
-              Text(
-                'YOUR LIBRARY',
-                style: GoogleFonts.dmSans(
-                  fontSize: 9,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.grey,
-                  letterSpacing: 2.5,
-                ),
+              Row(
+                children: [
+                  Text(
+                    'YOUR LIBRARY',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.grey,
+                      letterSpacing: 2.5,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.archive_outlined, size: 20, color: AppColors.accent),
+                    onPressed: () async {
+                      final ok = await ref.read(skillsProvider.notifier).addSkillFromZip();
+                      if (context.mounted && ok) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Skill package imported')),
+                        );
+                      }
+                    },
+                  ),
+                ],
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
 
               // List
               Expanded(
@@ -148,7 +210,7 @@ class SkillsScreen extends ConsumerWidget {
                                     style: GoogleFonts.dmSans(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w500,
-                                      color: AppColors.text,
+                                      color: Theme.of(context).textTheme.bodyLarge?.color,
                                     ),
                                   ),
                                   if (skill.description.isNotEmpty) ...[
@@ -175,7 +237,6 @@ class SkillsScreen extends ConsumerWidget {
         ),
       ),
 
-      // Add skill — text link bottom-right
       floatingActionButton: Padding(
         padding: const EdgeInsets.only(bottom: 72, right: 8),
         child: GestureDetector(
@@ -201,7 +262,7 @@ class SkillsScreen extends ConsumerWidget {
 
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(),
       builder: (ctx) => Padding(
@@ -231,7 +292,7 @@ class SkillsScreen extends ConsumerWidget {
               style: GoogleFonts.dmSans(
                 fontSize: 15,
                 fontWeight: FontWeight.w300,
-                color: AppColors.text,
+                color: Theme.of(ctx).textTheme.bodyLarge?.color,
               ),
             ),
             const SizedBox(height: 20),
@@ -245,7 +306,7 @@ class SkillsScreen extends ConsumerWidget {
               style: GoogleFonts.dmSans(
                 fontSize: 14,
                 fontWeight: FontWeight.w300,
-                color: AppColors.text,
+                color: Theme.of(ctx).textTheme.bodyLarge?.color,
               ),
             ),
             const SizedBox(height: 32),

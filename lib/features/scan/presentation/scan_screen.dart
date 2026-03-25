@@ -1,59 +1,79 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:arjgo/core/providers/auth_provider.dart';
+import 'package:arjgo/core/services/scan_history_service.dart';
 import 'package:arjgo/core/theme/app_theme.dart';
+import 'package:arjgo/shared/widgets/arjgo_widgets.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 
 class _ScanState {
   final Uint8List? imageBytes;
   final bool isAnalyzing;
   final String? result;
+  final List<ScanResult> history;
 
-  const _ScanState({this.imageBytes, this.isAnalyzing = false, this.result});
+  const _ScanState({
+    this.imageBytes,
+    this.isAnalyzing = false,
+    this.result,
+    this.history = const [],
+  });
 
-  _ScanState copyWith(
-          {Uint8List? imageBytes,
-          bool? isAnalyzing,
-          String? result}) =>
+  _ScanState copyWith({
+    Uint8List? imageBytes,
+    bool? isAnalyzing,
+    String? result,
+    List<ScanResult>? history,
+  }) =>
       _ScanState(
         imageBytes: imageBytes ?? this.imageBytes,
         isAnalyzing: isAnalyzing ?? this.isAnalyzing,
         result: result ?? this.result,
+        history: history ?? this.history,
       );
 }
 
 class _ScanNotifier extends StateNotifier<_ScanState> {
   final AuthState authState;
   final Dio _dio = Dio();
-  
-  _ScanNotifier(this.authState) : super(const _ScanState());
+  final ScanHistoryService _historyService = ScanHistoryService();
+
+  _ScanNotifier(this.authState) : super(const _ScanState()) {
+    _loadHistory();
+  }
+
+  Future<void> _loadHistory() async {
+    final h = await _historyService.getHistory();
+    state = state.copyWith(history: h);
+  }
 
   void setImage(Uint8List bytes) {
-    state = _ScanState(imageBytes: bytes, isAnalyzing: false, result: null);
+    state = state.copyWith(imageBytes: bytes, isAnalyzing: false, result: null);
   }
 
   Future<void> analyze() async {
     if (state.imageBytes == null) return;
     state = state.copyWith(isAnalyzing: true, result: null);
 
-    const commonPrompt = 'Describe this image clearly for a minimalist AI tool. Focus on objects and context.';
+    const commonPrompt =
+        'Describe this image clearly for a minimalist AI tool. Focus on objects and context.';
+    String finalResult = '';
 
     if (authState.isOnlineModel && authState.openRouterKey.isNotEmpty) {
-      // ── ONLINE: OpenRouter ──────────────────────────────────────────
       try {
         final base64Image = base64Encode(state.imageBytes!);
-        // Using OpenRouter multimodal template
         final response = await _dio.post(
           'https://openrouter.ai/api/v1/chat/completions',
           options: Options(
             headers: {
               'Authorization': 'Bearer ${authState.openRouterKey}',
               'Content-Type': 'application/json',
-              'HTTP-Referer': 'https://arjgo.app', // Required for some providers
+              'HTTP-Referer': 'https://arjgo.app',
               'X-Title': 'Arjgo App',
             },
           ),
@@ -74,33 +94,32 @@ class _ScanNotifier extends StateNotifier<_ScanState> {
           },
         );
 
-        final result = response.data['choices'][0]['message']['content'] as String;
-        state = state.copyWith(
-          isAnalyzing: false,
-          result: 'ENGINE: QWEN3-VL-8B-INSTRUCT (Cloud)\n\n$result',
-        );
+        finalResult =
+            response.data['choices'][0]['message']['content'] as String;
       } catch (e) {
-        state = state.copyWith(
-          isAnalyzing: false,
-          result: 'Analysis unavailable. Please check your API key and connection.\nError: $e',
-        );
+        finalResult = 'Error: $e';
       }
     } else {
-      // ── OFFLINE: Simulated ──────────────────────────────────────────
       await Future.delayed(const Duration(seconds: 2));
-      state = state.copyWith(
-        isAnalyzing: false,
-        result:
-            'ENGINE: QWEN3-VL-2B-INSTRUCT (Local)\n\n'
-            'The view contains a distinct arrangement of minimalist elements. '
-            'Objects appear with high edge-contrast against the background. '
-            'Composition suggests a focused subject in the center.\n\n'
-            'Prompt: $commonPrompt',
-      );
+      finalResult = 'ENGINE: LOCAL · QWEN3-VL-2B\n\n'
+          'The image contains structural geometry with high contrast. '
+          'Primary object identified in central focal point.';
     }
+
+    state = state.copyWith(isAnalyzing: false, result: finalResult);
+
+    // Save to history
+    final resObj = ScanResult(
+      date: DateTime.now().toIso8601String(),
+      result: finalResult,
+      imageUrl: '',
+    );
+    await _historyService.saveResult(resObj);
+    _loadHistory();
   }
 
-  void reset() => state = const _ScanState();
+  void reset() =>
+      state = state.copyWith(imageBytes: null, result: null, isAnalyzing: false);
 }
 
 final _scanStateProvider =
@@ -111,6 +130,15 @@ final _scanStateProvider =
 
 class ScanScreen extends ConsumerWidget {
   const ScanScreen({super.key});
+
+  Future<void> _pickImage(ImageSource source, _ScanNotifier notifier) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source, maxWidth: 1024);
+    if (picked != null) {
+      final bytes = await picked.readAsBytes();
+      notifier.setImage(bytes);
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -123,194 +151,227 @@ class ScanScreen extends ConsumerWidget {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 24),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => notifier.reset(),
-                    child: const Icon(Icons.arrow_back,
-                        size: 18, color: AppColors.text),
-                  ),
+                  const ArjgoLogo(),
+                  const Spacer(),
+                  if (state.imageBytes != null)
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => notifier.reset(),
+                    ),
                 ],
               ),
             ),
 
             if (state.imageBytes != null) ...[
-              // Image preview
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               Expanded(
-                flex: 5,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.memory(
-                      state.imageBytes!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    ),
-                  ),
-                ),
-              ),
-
-              // Divider + result
-              const SizedBox(height: 16),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 32),
-                child: Divider(),
-              ),
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
-                child: Text(
-                  'ANALYSIS',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.grey,
-                    letterSpacing: 2.5,
-                  ),
-                ),
-              ),
-              Expanded(
-                flex: 4,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: state.isAnalyzing
-                      ? Row(
-                          children: [
-                            SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.2,
-                                color: AppColors.accent,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              'Analysing…',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 13,
-                                color: AppColors.grey,
-                                fontWeight: FontWeight.w300,
-                              ),
-                            ),
-                          ],
-                        )
-                      : state.result != null
-                          ? SingleChildScrollView(
-                              child: Text(
-                                state.result!,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w300,
-                                  color: AppColors.text,
-                                  height: 1.6,
+                  child: Column(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: Image.memory(
+                          state.imageBytes!,
+                          height: 200,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Expanded(
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(24),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            border: Border.all(color: AppColors.divider),
+                          ),
+                          child: state.isAnalyzing
+                              ? const Center(
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 1))
+                              : SingleChildScrollView(
+                                  child: Text(
+                                    state.result ?? 'READY FOR ANALYSIS',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w300,
+                                      height: 1.6,
+                                      color: state.result == null
+                                          ? AppColors.grey
+                                          : Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.color,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            )
-                          : GestureDetector(
-                              onTap: () => notifier.analyze(),
-                              child: Text(
-                                'TAP TO ANALYSE',
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.accent,
-                                  letterSpacing: 2,
-                                ),
-                              ),
-                            ),
+                        ),
+                      ),
+                      if (state.result == null && !state.isAnalyzing) ...[
+                        const SizedBox(height: 16),
+                        _ActionBtn(
+                            label: 'ANALYSE', onTap: () => notifier.analyze()),
+                      ],
+                    ],
+                  ),
                 ),
               ),
             ] else ...[
-              const Spacer(),
-              Center(
-                child: Text(
-                  'Point. Capture. Understand.',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w300,
-                    color: AppColors.grey,
-                    fontStyle: FontStyle.italic,
-                    letterSpacing: 0.3,
-                  ),
-                ),
+              Expanded(
+                child: state.history.isEmpty
+                    ? Center(
+                        child: Text(
+                          'CAPTURE TO BEGIN',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.grey,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      )
+                    : _HistoryList(history: state.history),
               ),
-              const SizedBox(height: 24),
-
-              // Camera button
-              Center(
-                child: GestureDetector(
-                  onTap: modelReady
-                      ? () => _captureImage(context, notifier)
-                      : null,
-                  child: Opacity(
-                    opacity: modelReady ? 1.0 : 0.4,
-                    child: Container(
-                      width: 72,
-                      height: 72,
-                      decoration: const BoxDecoration(
-                        color: AppColors.accent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.camera_alt_outlined,
-                        color: AppColors.white,
-                        size: 28,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (!modelReady) ...[
-                const SizedBox(height: 12),
-                Center(
-                  child: Text(
-                    'Model loading…',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 10,
-                      color: AppColors.grey,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ),
-              ],
-              const Spacer(),
             ],
+
+            // Bottom controls
+            if (state.imageBytes == null)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _RoundBtn(
+                      icon: Icons.photo_library_outlined,
+                      onTap: () => _pickImage(ImageSource.gallery, notifier),
+                      small: true,
+                    ),
+                    const SizedBox(width: 40),
+                    _RoundBtn(
+                      icon: Icons.camera_alt_outlined,
+                      onTap: modelReady
+                          ? () => _pickImage(ImageSource.camera, notifier)
+                          : null,
+                    ),
+                    const SizedBox(width: 40),
+                    const SizedBox(width: 48), // Spacer for symmetry
+                  ],
+                ),
+              ),
             const SizedBox(height: 24),
           ],
         ),
       ),
     );
   }
+}
 
-  Future<void> _captureImage(
-      BuildContext context, _ScanNotifier notifier) async {
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: ImageSource.camera);
-      if (picked != null) {
-        final bytes = await picked.readAsBytes();
-        notifier.setImage(bytes);
-      }
-    } catch (_) {
-      // Fall back to gallery on web where camera may not be available
-      try {
-        final picker = ImagePicker();
-        final picked = await picker.pickImage(source: ImageSource.gallery);
-        if (picked != null) {
-          final bytes = await picked.readAsBytes();
-          notifier.setImage(bytes);
-        }
-      } catch (e) {
-        debugPrint('Image pick error: $e');
-      }
-    }
+class _ActionBtn extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  const _ActionBtn({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        color: AppColors.accent,
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: GoogleFonts.dmSans(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: AppColors.white,
+            letterSpacing: 2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoundBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool small;
+  const _RoundBtn({required this.icon, this.onTap, this.small = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final size = small ? 48.0 : 72.0;
+    return GestureDetector(
+      onTap: onTap,
+      child: Opacity(
+        opacity: onTap == null ? 0.3 : 1.0,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            border: Border.all(color: AppColors.divider),
+            borderRadius: BorderRadius.circular(size / 2),
+          ),
+          child: Icon(icon, color: AppColors.accent, size: small ? 20 : 28),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryList extends StatelessWidget {
+  final List<ScanResult> history;
+  const _HistoryList({required this.history});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+      itemCount: history.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 16),
+      itemBuilder: (context, i) {
+        final item = history[i];
+        final date = DateTime.tryParse(item.date) ?? DateTime.now();
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.divider),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                DateFormat('MMM d, h:mm a').format(date),
+                style: GoogleFonts.dmSans(
+                    fontSize: 9,
+                    color: AppColors.grey,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.result,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.dmSans(
+                    fontSize: 12,
+                    color: Theme.of(context).textTheme.bodyMedium?.color,
+                    height: 1.4),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

@@ -6,6 +6,7 @@ import 'package:arjgo/features/auth/presentation/register_screen.dart';
 import 'package:arjgo/features/model_download/presentation/model_download_screen.dart';
 import 'package:arjgo/features/shell/presentation/main_shell.dart';
 import 'package:arjgo/features/home/presentation/home_screen.dart';
+import 'package:arjgo/features/settings/presentation/settings_screen.dart';
 import 'package:arjgo/features/scan/presentation/scan_screen.dart';
 import 'package:arjgo/features/skills/presentation/skills_screen.dart';
 
@@ -47,6 +48,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
           GoRoute(path: '/scan', builder: (_, __) => const ScanScreen()),
           GoRoute(path: '/skills', builder: (_, __) => const SkillsScreen()),
+          GoRoute(path: '/settings', builder: (_, __) => const SettingsScreen()),
         ],
       ),
       GoRoute(path: '/', redirect: (_, __) => '/login'),

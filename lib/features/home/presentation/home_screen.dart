@@ -98,18 +98,20 @@ class HomeScreen extends ConsumerWidget {
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                color: auth.isModelDownloaded
+                color: auth.isModelConfigured
                     ? AppColors.accent.withOpacity(0.06)
                     : AppColors.grey.withOpacity(0.06),
                 child: Text(
-                  auth.isModelDownloaded ? 'Model ready' : 'Model loading…',
+                  auth.isModelConfigured 
+                      ? (auth.isOnlineModel ? 'MODEL: CLOUD' : 'MODEL: LOCAL')
+                      : 'MODEL LOADING…',
                   style: GoogleFonts.dmSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: auth.isModelDownloaded
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: auth.isModelConfigured
                         ? AppColors.accent
                         : AppColors.grey,
-                    letterSpacing: 0.5,
+                    letterSpacing: 1.5,
                   ),
                 ),
               ),
@@ -186,6 +188,21 @@ class HomeScreen extends ConsumerWidget {
                 fontWeight: FontWeight.w600,
                 color: AppColors.grey,
                 letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/settings');
+              },
+              child: Text(
+                'Settings',
+                style: GoogleFonts.dmSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w300,
+                  color: AppColors.text,
+                ),
               ),
             ),
             const SizedBox(height: 24),

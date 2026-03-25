@@ -164,6 +164,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(downloadProgress: progress);
   }
 
+  Future<void> updateProfile({required String name, required String email}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('userName', name);
+    await prefs.setString('userEmail', email);
+    state = state.copyWith(userName: name, userEmail: email);
+  }
+
   Future<void> logout() async {
     await sb.Supabase.instance.client.auth.signOut();
   }
