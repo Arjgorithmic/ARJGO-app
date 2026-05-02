@@ -6,9 +6,9 @@ Arjgo is a minimalist, high-performance Flutter application designed to provide 
 
 ## Visual Overview
 
-| Home Screen | Chat Interface| Finance Management|
+| Home Screen | Chat Interface | Finance Management |
 | :---: | :---: | :---: |
-| ![Home Screen](screenshots/screenshot1.jpeg) | ![Chat Interface](screenshots/screenshot3.jpeg) | ![Finance Management](screenshots/screenshot5.jpeg) |
+| <img src="screenshots/homepage.jpeg" width="200" /> | <img src="screenshots/screenshot3.jpeg" width="200" /> | <img src="screenshots/screenshot5.jpeg" width="200" /> |
 
 ---
 
