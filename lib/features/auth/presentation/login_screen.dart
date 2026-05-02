@@ -31,7 +31,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
     try {
-      await ref.read(authProvider.notifier).login(
+      await ref.read(authProvider).login(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
       );
@@ -67,7 +67,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: 8),
                 Center(
                   child: Text(
-                    'Your skills, seen clearly.',
+                    'Your traits, seen clearly.',
                     style: GoogleFonts.dmSans(
                       fontSize: 12,
                       fontWeight: FontWeight.w300,
@@ -148,7 +148,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 16),
+                const VibeFooter(),
               ],
             ),
           ),

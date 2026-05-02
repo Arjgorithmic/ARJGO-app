@@ -12,7 +12,7 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final auth = ref.watch(authProvider);
+    final auth = ref.watch(authProvider).state;
     final joinDate = auth.registeredAt != null
         ? DateFormat('d MMM yyyy').format(auth.registeredAt!)
         : '—';
@@ -174,7 +174,7 @@ class HomeScreen extends ConsumerWidget {
   void _showMenu(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: AppColors.white,
+      backgroundColor: Theme.of(context).cardColor,
       shape: const RoundedRectangleBorder(),
       builder: (_) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
@@ -189,6 +189,21 @@ class HomeScreen extends ConsumerWidget {
                 fontWeight: FontWeight.w600,
                 color: AppColors.grey,
                 letterSpacing: 2.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            GestureDetector(
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/management');
+              },
+              child: Text(
+                'Management',
+                style: GoogleFonts.dmSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w300,
+                  color: Theme.of(context).textTheme.bodyLarge?.color ?? AppColors.text ,
+                ),
               ),
             ),
             const SizedBox(height: 24),

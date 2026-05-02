@@ -33,7 +33,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _loading = true; _error = null; });
     try {
-      await ref.read(authProvider.notifier).register(
+      await ref.read(authProvider).register(
         name: _nameCtrl.text.trim(),
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
@@ -160,7 +160,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 16),
+                const VibeFooter(),
               ],
             ),
           ),

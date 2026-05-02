@@ -23,20 +23,26 @@ class _ModelSelectionScreenState extends ConsumerState<ModelSelectionScreen> {
     super.dispose();
   }
 
-  void _selectOffline() {
-    ref.read(authProvider.notifier).setModelOffline();
-    context.go('/download');
+  Future<void> _selectOffline() async {
+    debugPrint('DEBUG: ModelSelectionScreen - _selectOffline called');
+    await ref.read(authProvider).setModelOffline();
+    debugPrint('DEBUG: ModelSelectionScreen - setModelOffline finished, pushing to /download');
+    if (mounted) {
+      context.go('/download');
+      debugPrint('DEBUG: ModelSelectionScreen - context.go(/download) executed');
+    }
   }
 
   void _selectOnline() {
+    debugPrint('DEBUG: ModelSelectionScreen - _selectOnline called');
     if (_apiKeyCtrl.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter an OpenRouter API key')),
       );
       return;
     }
-    ref.read(authProvider.notifier).setModelOnline(_apiKeyCtrl.text.trim());
-    // Once configured, the router logic should auto-redirect to /home
+    ref.read(authProvider).setModelOnline(_apiKeyCtrl.text.trim());
+    debugPrint('DEBUG: ModelSelectionScreen - setModelOnline executed');
   }
 
   @override
@@ -44,7 +50,7 @@ class _ModelSelectionScreenState extends ConsumerState<ModelSelectionScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -71,12 +77,12 @@ class _ModelSelectionScreenState extends ConsumerState<ModelSelectionScreen> {
                 ),
               ),
               
-              const Spacer(),
+              const SizedBox(height: 100), // Fixed gap for better layout stability
 
               // Option 1: Offline
               _SelectionCard(
                 title: 'OFFLINE',
-                subtitle: 'Local Qwen3-VL-2B (4.3GB download)',
+                subtitle: 'Local Qwen2-VL-2B (1.7GB download)',
                 icon: Icons.offline_bolt_outlined,
                 onTap: _selectOffline,
               ),
@@ -87,73 +93,79 @@ class _ModelSelectionScreenState extends ConsumerState<ModelSelectionScreen> {
               if (!_showApiKeyField) ...[
                 _SelectionCard(
                   title: 'CLOUD',
-                  subtitle: 'OpenRouter · Qwen3-VL-8B-Instruct',
+                  subtitle: 'OpenRouter · Qwen2-VL-72B-Instruct',
                   icon: Icons.cloud_outlined,
                   onTap: () => setState(() => _showApiKeyField = true),
                 ),
               ] else ...[
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: AppColors.white,
-                    border: Border.all(color: AppColors.divider),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'OPENROUTER ACCESS',
-                        style: GoogleFonts.dmSans(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.grey,
-                          letterSpacing: 1.5,
+                Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      border: Border.all(color: AppColors.divider),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'OPENROUTER ACCESS',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.grey,
+                            letterSpacing: 1.5,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      ArjgoTextField(
-                        label: 'API Key',
-                        controller: _apiKeyCtrl,
-                        obscureText: true,
-                        hint: 'sk-or-v1-...',
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          GestureDetector(
-                            onTap: () => setState(() => _showApiKeyField = false),
-                            child: Text(
-                              'BACK',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.grey,
-                                letterSpacing: 1,
+                        const SizedBox(height: 16),
+                        ArjgoTextField(
+                          label: 'API Key',
+                          controller: _apiKeyCtrl,
+                          obscureText: true,
+                          hint: 'sk-or-v1-...',
+                        ),
+                        const SizedBox(height: 24),
+                        Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => setState(() => _showApiKeyField = false),
+                              behavior: HitTestBehavior.opaque,
+                              child: Text(
+                                'BACK',
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.grey,
+                                  letterSpacing: 1,
+                                ),
                               ),
                             ),
-                          ),
-                          const Spacer(),
-                          GestureDetector(
-                            onTap: _selectOnline,
-                            child: Text(
-                              'CONNECT',
-                              style: GoogleFonts.dmSans(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.accent,
-                                letterSpacing: 1,
+                            const Spacer(),
+                            GestureDetector(
+                              onTap: _selectOnline,
+                              behavior: HitTestBehavior.opaque,
+                              child: Text(
+                                'CONNECT',
+                                style: GoogleFonts.dmSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.accent,
+                                  letterSpacing: 1,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
 
-              const Spacer(flex: 2),
+              const SizedBox(height: 32),
+              const VibeFooter(),
             ],
           ),
         ),
@@ -177,43 +189,48 @@ class _SelectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          border: Border.all(color: AppColors.divider),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Row(
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.accent,
-                    letterSpacing: 3,
-                  ),
+    return Card(
+      elevation: 0,
+      color: Theme.of(context).cardColor,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: AppColors.divider),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.accent,
+                        letterSpacing: 3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w300,
+                        color: AppColors.grey,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.dmSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w300,
-                    color: AppColors.grey,
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Icon(icon, color: AppColors.divider, size: 24),
-          ],
+              ),
+              Icon(icon, color: AppColors.divider, size: 24),
+            ],
+          ),
         ),
       ),
     );

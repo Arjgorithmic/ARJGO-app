@@ -8,7 +8,7 @@ class ArjgoLogo extends StatelessWidget {
 
   const ArjgoLogo({
     super.key,
-    this.fontSize = 13,
+    this.fontSize = 11,
     this.color = AppColors.accent,
   });
 
@@ -38,7 +38,7 @@ class ArjgoLogoInline extends StatelessWidget {
 
   const ArjgoLogoInline({
     super.key,
-    this.fontSize = 18,
+    this.fontSize = 16,
     this.color = AppColors.accent,
   });
 
@@ -89,6 +89,27 @@ class ArjgoTextField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label.toUpperCase(),
         hintText: hint,
+      ),
+    );
+  }
+}
+class VibeFooter extends StatelessWidget {
+  const VibeFooter({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Text(
+          'Built by Arjgorithmic with pure vibes ✨',
+          style: GoogleFonts.dmSans(
+            fontSize: 9,
+            fontWeight: FontWeight.w400,
+            color: AppColors.grey.withOpacity(0.6),
+            letterSpacing: 0.2,
+          ),
+        ),
       ),
     );
   }

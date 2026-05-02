@@ -13,6 +13,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -37,8 +38,24 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    // libllama_server.so is an ELF executable (not a shared library), so llvm-strip
+    // cannot process it. Tell AGP to skip stripping it entirely.
+    packaging {
+        jniLibs {
+            keepDebugSymbols += setOf(
+                "*/arm64-v8a/*.so",
+                "*/x86_64/*.so",
+                "*/armeabi-v7a/*.so"
+            )
+        }
+    }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3")
 }

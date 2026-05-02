@@ -14,6 +14,7 @@ class AuthState {
   final DateTime? registeredAt;
   final double downloadProgress;
   final String? localModelPath;
+  final String? localMMProjPath;
 
   const AuthState({
     this.isLoggedIn = false,
@@ -25,6 +26,7 @@ class AuthState {
     this.registeredAt,
     this.downloadProgress = 0.0,
     this.localModelPath,
+    this.localMMProjPath,
   });
 
   bool get isModelConfigured => isModelDownloaded || (isOnlineModel && openRouterKey.isNotEmpty);
@@ -39,6 +41,7 @@ class AuthState {
     DateTime? registeredAt,
     double? downloadProgress,
     String? localModelPath,
+    String? localMMProjPath,
   }) {
     return AuthState(
       isLoggedIn: isLoggedIn ?? this.isLoggedIn,
@@ -50,12 +53,16 @@ class AuthState {
       registeredAt: registeredAt ?? this.registeredAt,
       downloadProgress: downloadProgress ?? this.downloadProgress,
       localModelPath: localModelPath ?? this.localModelPath,
+      localMMProjPath: localMMProjPath ?? this.localMMProjPath,
     );
   }
 }
 
-class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(const AuthState()) {
+class AuthNotifier extends ChangeNotifier {
+  AuthState _state = const AuthState();
+  AuthState get state => _state;
+
+  AuthNotifier() {
     _init();
   }
 
@@ -70,7 +77,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (user != null) {
         _loadUser(user);
       } else {
-        state = state.copyWith(isLoggedIn: false, userName: '', userEmail: '');
+        _state = _state.copyWith(isLoggedIn: false, userName: '', userEmail: '');
+        notifyListeners();
       }
     });
 
@@ -82,12 +90,13 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final email = user.email ?? '';
     final registeredAt = DateTime.tryParse(user.createdAt);
 
-    state = state.copyWith(
+    _state = _state.copyWith(
       isLoggedIn: true,
       userName: name,
       userEmail: email,
       registeredAt: registeredAt,
     );
+    notifyListeners();
   }
 
   Future<void> _loadLocalFlags() async {
@@ -95,24 +104,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
       final prefs = await SharedPreferences.getInstance();
       final isDownloaded = prefs.getBool('isModelDownloaded') ?? false;
       final modelPath = prefs.getString('localModelPath');
+      final mmprojPath = prefs.getString('localMMProjPath');
       final isOnline = prefs.getBool('isOnlineModel') ?? false;
       final apiKey = prefs.getString('openRouterKey') ?? '';
 
-      // Also check filesystem directly for robustness (only if not already marked downloaded in prefs)
       String? actualPath = modelPath;
+      String? actualMMPath = mmprojPath;
       bool fileExists = isDownloaded;
       if (!isDownloaded) {
         final modelService = ModelDownloadService();
         fileExists = await modelService.isModelDownloaded();
         actualPath = fileExists ? await modelService.getModelPath() : null;
+        actualMMPath = fileExists ? await modelService.getMMProjPath() : null;
       }
 
-      state = state.copyWith(
+      _state = _state.copyWith(
         isModelDownloaded: fileExists,
         localModelPath: actualPath,
+        localMMProjPath: actualMMPath,
         isOnlineModel: isOnline,
         openRouterKey: apiKey,
       );
+      notifyListeners();
     } catch (e) {
       debugPrint('Error loading local flags: $e');
     }
@@ -121,14 +134,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> setModelOffline() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isOnlineModel', false);
-    state = state.copyWith(isOnlineModel: false);
+    _state = _state.copyWith(isOnlineModel: false);
+    notifyListeners();
   }
 
   Future<void> setModelOnline(String apiKey) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isOnlineModel', true);
     await prefs.setString('openRouterKey', apiKey);
-    state = state.copyWith(isOnlineModel: true, openRouterKey: apiKey);
+    _state = _state.copyWith(isOnlineModel: true, openRouterKey: apiKey);
+    notifyListeners();
   }
 
   Future<void> register({
@@ -153,22 +168,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
     );
   }
 
-  Future<void> setModelDownloaded(String path) async {
+  Future<void> setModelDownloaded(String path, String mmPath) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isModelDownloaded', true);
     await prefs.setString('localModelPath', path);
-    state = state.copyWith(isModelDownloaded: true, localModelPath: path);
+    await prefs.setString('localMMProjPath', mmPath);
+    _state = _state.copyWith(
+      isModelDownloaded: true, 
+      localModelPath: path,
+      localMMProjPath: mmPath,
+    );
+    notifyListeners();
   }
 
   void updateDownloadProgress(double progress) {
-    state = state.copyWith(downloadProgress: progress);
+    // Only notify listeners when progress changes by ≥1% to avoid
+    // triggering hundreds of GoRouter redirect evaluations per second.
+    if ((progress - _state.downloadProgress).abs() >= 0.01 || progress >= 1.0) {
+      _state = _state.copyWith(downloadProgress: progress);
+      notifyListeners();
+    }
   }
 
   Future<void> updateProfile({required String name, required String email}) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('userName', name);
     await prefs.setString('userEmail', email);
-    state = state.copyWith(userName: name, userEmail: email);
+    _state = _state.copyWith(userName: name, userEmail: email);
+    notifyListeners();
   }
 
   Future<void> logout() async {
@@ -176,6 +203,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 }
 
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
+final authProvider = ChangeNotifierProvider<AuthNotifier>(
   (ref) => AuthNotifier(),
 );

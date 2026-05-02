@@ -43,3 +43,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Arjgo Specifics
+.env
+.tmp_sqlite_vec/
+assets/models/
+assets/binaries/
+llama_cpp_src/

@@ -1,5 +1,5 @@
 name: arjgo
-description: "Arjgo — Your skills, seen clearly."
+description: "Arjgo — Your traits, seen clearly."
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -9,6 +9,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+
+  # Icons (required by image_picker, file_picker and other deps)
+  cupertino_icons: ^1.0.6
 
   # State management
   flutter_riverpod: ^2.5.1
@@ -25,6 +28,7 @@ dependencies:
 
   # HTTP/Downloading
   dio: ^5.4.1
+  background_downloader: ^8.1.1
 
   # Typography
   google_fonts: ^6.2.1
@@ -32,8 +36,15 @@ dependencies:
   # Image picking / camera
   image_picker: ^1.1.2
 
-  # Markdown parsing (skill.md)
-  flutter_markdown: ^0.6.22
+  # Markdown parsing
+  flutter_markdown_plus: ^1.0.0
+
+  # Local storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # Image processing
+  image: ^4.2.0
 
   # Utilities
   uuid: ^4.4.0
@@ -41,17 +52,45 @@ dependencies:
   archive: ^4.0.9
   file_picker: ^10.3.10
 
+  # Local storage (SQLite + Vector)
+  sqlite3: ^3.3.1
+  sqlite3_flutter_libs: ^0.6.0
+  sqlite_vector: ^0.9.95
+  path: ^1.9.1
+
+  # Local Intelligence (Embeddings)
+  flutter_embedder: ^0.1.7
+
+  # Document Parsing
+  syncfusion_flutter_pdf: ^33.2.4
+
+  # Permissions & Notifications
+  permission_handler: ^11.3.1
+  flutter_local_notifications: ^17.1.2
+  timezone: ^0.9.4
+  flutter_dotenv: ^5.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  min_sdk_android: 21
 
 flutter:
   uses-material-design: true
 
   assets:
-    - assets/skills/skill.md
     - assets/images/
+    - assets/binaries/
+    - assets/traits/
+    - assets/models/
+    - .env
 
   # fonts:
   #   - family: DMSans

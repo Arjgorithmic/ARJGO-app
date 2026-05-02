@@ -1,166 +1,238 @@
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
+import 'package:arjgo/core/models/trait.dart';
 import 'package:arjgo/core/providers/auth_provider.dart';
-import 'package:arjgo/core/services/scan_history_service.dart';
+import 'package:arjgo/core/services/trait_engine.dart';
+import 'package:arjgo/core/services/trait_storage_service.dart';
 import 'package:arjgo/core/theme/app_theme.dart';
-import 'package:arjgo/features/skills/presentation/skills_screen.dart';
+import 'package:arjgo/core/providers/trait_provider.dart';
+import 'package:arjgo/features/traits/presentation/traits_screen.dart';
 import 'package:arjgo/shared/widgets/arjgo_widgets.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 
+// Upgrade 4: Speed Feedback
+enum ScanStatus {
+  idle,
+  queued,
+  processing,
+  almostDone,
+  completed,
+  error
+}
+
+class ScanTask {
+  final String id;
+  final String localPath;
+  final Trait trait;
+  final ScanStatus status;
+  final String? result;
+  final DateTime createdAt;
+
+  ScanTask({
+    required this.id,
+    required this.localPath,
+    required this.trait,
+    this.status = ScanStatus.queued,
+    this.result,
+    required this.createdAt,
+  });
+
+  ScanTask copyWith({ScanStatus? status, String? result}) => ScanTask(
+    id: id,
+    localPath: localPath,
+    trait: trait,
+    status: status ?? this.status,
+    result: result ?? this.result,
+    createdAt: createdAt,
+  );
+}
+
 class _ScanState {
   final String? tempLocalPath;
-  final bool isAnalyzing;
+  final ScanStatus status;
   final String? result;
-  final List<ScanResult> history;
-  final Skill? selectedSkill;
+  final List<SavedScan> history;
+  final List<ScanTask> queue;
+  final Trait? selectedTrait;
 
   const _ScanState({
     this.tempLocalPath,
-    this.isAnalyzing = false,
+    this.status = ScanStatus.idle,
     this.result,
     this.history = const [],
-    this.selectedSkill,
+    this.queue = const [],
+    this.selectedTrait,
   });
 
   _ScanState copyWith({
     String? tempLocalPath,
-    bool? isAnalyzing,
+    ScanStatus? status,
     String? result,
-    List<ScanResult>? history,
-    Skill? selectedSkill,
-    bool clearSkill = false,
+    List<SavedScan>? history,
+    List<ScanTask>? queue,
+    Trait? selectedTrait,
+    bool clearTrait = false,
+    bool clearResult = false,
+    bool clearPath = false,
   }) =>
       _ScanState(
-        tempLocalPath: tempLocalPath ?? this.tempLocalPath,
-        isAnalyzing: isAnalyzing ?? this.isAnalyzing,
-        result: result ?? this.result,
+        tempLocalPath: clearPath ? null : (tempLocalPath ?? this.tempLocalPath),
+        status: status ?? this.status,
+        result: clearResult ? null : (result ?? this.result),
         history: history ?? this.history,
-        selectedSkill: clearSkill ? null : (selectedSkill ?? this.selectedSkill),
+        queue: queue ?? this.queue,
+        selectedTrait: clearTrait ? null : (selectedTrait ?? this.selectedTrait),
       );
+
+  bool get isLoading => status == ScanStatus.processing || status == ScanStatus.almostDone;
 }
 
 class _ScanNotifier extends StateNotifier<_ScanState> {
   final AuthState authState;
-  final Dio _dio = Dio();
-  final ScanHistoryService _historyService = ScanHistoryService();
+  final TraitExecutor _executor = TraitExecutor();
+  final TraitStorageService _storageService = TraitStorageService();
+  bool _isWorkerRunning = false;
 
   _ScanNotifier(this.authState) : super(const _ScanState()) {
     _loadHistory();
   }
 
   Future<void> _loadHistory() async {
-    final h = await _historyService.getHistory();
-    state = state.copyWith(history: h.reversed.toList());
+    final h = await _storageService.getAll();
+    state = state.copyWith(history: h);
   }
 
   void setImage(String path) {
     state = state.copyWith(
-        tempLocalPath: path, isAnalyzing: false, result: null);
+        tempLocalPath: path, status: ScanStatus.idle, clearResult: true);
   }
 
-  void selectSkill(Skill? skill) {
-    state = state.copyWith(selectedSkill: skill, clearSkill: skill == null);
+  void selectTrait(Trait? trait) {
+    state = state.copyWith(selectedTrait: trait, clearTrait: trait == null);
   }
 
-  Future<void> analyze() async {
-    if (state.tempLocalPath == null) return;
-    state = state.copyWith(isAnalyzing: true, result: null);
-
-    Uint8List bytes;
-    if (kIsWeb) {
-      final response = await _dio.get(state.tempLocalPath!,
-          options: Options(responseType: ResponseType.bytes));
-      bytes = Uint8List.fromList(response.data);
-    } else {
-      bytes = await File(state.tempLocalPath!).readAsBytes();
-    }
-
-    const commonPrompt = 'Analyze this image. Minimalist, professional tone.';
-    final systemPrompt = state.selectedSkill?.description ?? commonPrompt;
-
-    String finalResult = '';
-
-    if (authState.isOnlineModel && authState.openRouterKey.isNotEmpty) {
-      try {
-        final base64Image = base64Encode(bytes);
-        final response = await _dio.post(
-          'https://openrouter.ai/api/v1/chat/completions',
-          options: Options(
-            headers: {
-              'Authorization': 'Bearer ${authState.openRouterKey}',
-              'Content-Type': 'application/json',
-              'HTTP-Referer': 'https://arjgo.app',
-              'X-Title': 'Arjgo App',
-            },
-          ),
-          data: {
-            'model': 'qwen/qwen3-vl-8b-instruct',
-            'messages': [
-              {'role': 'system', 'content': systemPrompt},
-              {
-                'role': 'user',
-                'content': [
-                  {
-                    'type': 'image_url',
-                    'image_url': {'url': 'data:image/jpeg;base64,$base64Image'}
-                  },
-                ],
-              }
-            ],
-          },
-        );
-        finalResult =
-            response.data['choices'][0]['message']['content'] as String;
-      } catch (e) {
-        finalResult = 'Error: $e';
-      }
-    } else {
-      await Future.delayed(const Duration(seconds: 2));
-      finalResult = '### ANALYSIS (LOCAL)\n\n'
-          '**System Prompt Applied:** ${state.selectedSkill?.name ?? "Default"}\n\n'
-          '*   Structural geometry identified.\n'
-          '*   Minimalist composition confirmed.';
-    }
-
-    String permanentPath = state.tempLocalPath!;
-    if (!kIsWeb) {
-      final appDir = await getApplicationDocumentsDirectory();
-      final fileName = 'scan_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      permanentPath = '${appDir.path}/$fileName';
-      await File(state.tempLocalPath!).copy(permanentPath);
-    }
-
-    final resObj = ScanResult(
-      date: DateTime.now().toIso8601String(),
-      result: finalResult,
-      imagePath: permanentPath,
+  Future<void> analyze(List<TraitPipeline<dynamic>> availablePipelines) async {
+    if (state.tempLocalPath == null || state.selectedTrait == null) return;
+    
+    final newTask = ScanTask(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      localPath: state.tempLocalPath!,
+      trait: state.selectedTrait!,
+      createdAt: DateTime.now(),
     );
-    await _historyService.saveResult(resObj);
-    state = state.copyWith(isAnalyzing: false, result: finalResult);
-    _loadHistory();
+
+    // Minimize: Clear preview state and add to queue
+    state = state.copyWith(
+      queue: [...state.queue, newTask],
+      clearPath: true,
+      clearTrait: true,
+      clearResult: true,
+      status: ScanStatus.idle,
+    );
+
+    _startWorker(availablePipelines);
+  }
+
+  Future<void> _startWorker(List<TraitPipeline<dynamic>> pipelines) async {
+    if (_isWorkerRunning) return;
+    _isWorkerRunning = true;
+
+    while (true) {
+      final pending = state.queue.where((t) => t.status == ScanStatus.queued).toList();
+      if (pending.isEmpty) break;
+
+      final task = pending.first;
+      _updateTaskStatus(task.id, ScanStatus.processing);
+
+      try {
+        final imageFile = File(task.localPath);
+        if (!await imageFile.exists()) {
+          state = state.copyWith(queue: state.queue.where((t) => t.id != task.id).toList());
+          continue;
+        }
+
+        String resultString;
+        dynamic structuredResult;
+
+        final pipeline = pipelines.cast<TraitPipeline?>().firstWhere(
+          (p) => p?.id == task.trait.id,
+          orElse: () => null,
+        );
+
+        if (pipeline != null) {
+          structuredResult = await _executor.execute(
+            pipeline: pipeline,
+            image: imageFile,
+            isOnline: authState.isOnlineModel,
+            apiKey: authState.openRouterKey,
+            isPriority: true,
+          );
+          resultString = structuredResult.toString();
+        } else {
+          resultString = await (authState.isOnlineModel 
+            ? runCloudInference(task.trait.promptTemplate, imageFile, authState.openRouterKey)
+            : runLocalInference(task.trait.promptTemplate, imageFile, isPriority: true));
+        }
+        
+        // Save permanently
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = 'scan_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final permanentPath = '${appDir.path}/$fileName';
+        await imageFile.copy(permanentPath);
+
+        final savedScan = SavedScan(
+          date: DateTime.now().toIso8601String(),
+          traitId: task.trait.id,
+          traitName: task.trait.name,
+          result: resultString,
+          imagePath: permanentPath,
+          structuredData: structuredResult is! String ? {'type': structuredResult.runtimeType.toString()} : null,
+        );
+
+        await _storageService.save(savedScan);
+        
+        // Success: Refresh history and remove from queue in ONE state update
+        final h = await _storageService.getAll();
+        state = state.copyWith(
+          queue: state.queue.where((t) => t.id != task.id).toList(),
+          history: h,
+        );
+      } catch (e) {
+        debugPrint('ScanWorker: Task ${task.id} failed: $e');
+        _updateTaskStatus(task.id, ScanStatus.error, result: 'Error: $e');
+        await Future.delayed(const Duration(seconds: 3));
+        state = state.copyWith(
+          queue: state.queue.where((t) => t.id != task.id).toList(),
+        );
+      }
+    }
+
+    _isWorkerRunning = false;
+  }
+
+  void _updateTaskStatus(String id, ScanStatus status, {String? result}) {
+    state = state.copyWith(
+      queue: state.queue.map((t) => t.id == id ? t.copyWith(status: status, result: result) : t).toList(),
+    );
   }
 
   Future<void> deleteHistory(String date) async {
-    await _historyService.deleteResult(date);
+    await _storageService.delete(date);
     _loadHistory();
   }
 
   void reset() =>
-      state = state.copyWith(tempLocalPath: null, result: null, isAnalyzing: false, clearSkill: true);
+      state = state.copyWith(clearPath: true, clearResult: true, status: ScanStatus.idle, clearTrait: true);
 }
 
 final _scanStateProvider =
     StateNotifierProvider<_ScanNotifier, _ScanState>((ref) {
-  final authState = ref.watch(authProvider);
+  final authState = ref.watch(authProvider).state;
   return _ScanNotifier(authState);
 });
 
@@ -169,7 +241,7 @@ class ScanScreen extends ConsumerWidget {
 
   Future<void> _pickImage(ImageSource source, _ScanNotifier notifier) async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, maxWidth: 1024);
+    final picked = await picker.pickImage(source: source);
     if (picked != null) {
       notifier.setImage(picked.path);
     }
@@ -179,7 +251,7 @@ class ScanScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(_scanStateProvider);
     final notifier = ref.read(_scanStateProvider.notifier);
-    final modelReady = ref.watch(authProvider).isModelConfigured;
+    final isModelConfigured = ref.watch(authProvider).state.isModelConfigured;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -204,12 +276,12 @@ class ScanScreen extends ConsumerWidget {
             Expanded(
               child: state.tempLocalPath != null
                   ? _ActiveScanOverlay(state: state, notifier: notifier)
-                  : _HistoryGrid(history: state.history),
+                  : _HistoryGrid(history: state.history, queue: state.queue),
             ),
             if (state.tempLocalPath == null)
               _BottomControls(
                 onGallery: () => _pickImage(ImageSource.gallery, notifier),
-                onCamera: modelReady
+                onCamera: isModelConfigured
                     ? () => _pickImage(ImageSource.camera, notifier)
                     : null,
               ),
@@ -227,7 +299,7 @@ class _ActiveScanOverlay extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final skillsAsync = ref.watch(skillsProvider);
+    final traitsAsync = ref.watch(traitsProvider);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -238,18 +310,16 @@ class _ActiveScanOverlay extends ConsumerWidget {
             flex: 3,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(2),
-              child: kIsWeb
-                  ? Image.network(state.tempLocalPath!,
-                      fit: BoxFit.cover, width: double.infinity)
-                  : Image.file(File(state.tempLocalPath!),
-                      fit: BoxFit.cover, width: double.infinity),
+              child: Image.file(File(state.tempLocalPath!),
+                  fit: BoxFit.cover, width: double.infinity),
             ),
           ),
           const SizedBox(height: 16),
 
-          if (state.result == null && !state.isAnalyzing) ...[
+          if (state.result == null && !state.isLoading) ...[
+            const SizedBox(height: 12),
             Text(
-              'SELECT SKILL AS SYSTEM PROMPT',
+              'SELECT TRAIT',
               style: GoogleFonts.dmSans(
                 fontSize: 8,
                 fontWeight: FontWeight.bold,
@@ -260,16 +330,16 @@ class _ActiveScanOverlay extends ConsumerWidget {
             const SizedBox(height: 12),
             SizedBox(
               height: 40,
-              child: skillsAsync.when(
-                data: (skills) => ListView.separated(
+              child: traitsAsync.when(
+                data: (traits) => ListView.separated(
                   scrollDirection: Axis.horizontal,
-                  itemCount: skills.length,
+                  itemCount: traits.length,
                   separatorBuilder: (_, __) => const SizedBox(width: 8),
                   itemBuilder: (ctx, i) {
-                    final s = skills[i];
-                    final isSelected = state.selectedSkill?.name == s.name;
+                    final t = traits[i];
+                    final isSelected = state.selectedTrait?.id == t.id;
                     return GestureDetector(
-                      onTap: () => notifier.selectSkill(isSelected ? null : s),
+                      onTap: () => notifier.selectTrait(isSelected ? null : t),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
@@ -284,7 +354,7 @@ class _ActiveScanOverlay extends ConsumerWidget {
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          s.name.toUpperCase(),
+                          t.name.toUpperCase(),
                           style: GoogleFonts.dmSans(
                             fontSize: 10,
                             fontWeight: isSelected
@@ -303,34 +373,124 @@ class _ActiveScanOverlay extends ConsumerWidget {
                 error: (_, __) => const SizedBox(),
               ),
             ),
+            const SizedBox(height: 12),
+            _Btn(
+              label: 'DISCARD PHOTO', 
+              onTap: () => notifier.reset(),
+            ),
           ],
 
           const SizedBox(height: 16),
-          if (state.isAnalyzing)
-            const Center(child: CircularProgressIndicator(strokeWidth: 1))
-          else if (state.result != null)
+          if (state.isLoading)
+            Column(
+              children: [
+                const Center(child: CircularProgressIndicator(strokeWidth: 1)),
+                const SizedBox(height: 16),
+                Text(
+                  state.status == ScanStatus.processing ? "Analyzing..." : "Almost done...",
+                  style: GoogleFonts.dmSans(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.grey,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            )
+          else if (state.result != null || state.status == ScanStatus.error)
             Expanded(
               flex: 4,
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
                   color: Theme.of(context).cardColor,
-                  border: Border.all(color: AppColors.divider),
+                  border: Border.all(
+                    color: state.status == ScanStatus.error 
+                        ? Colors.red.withOpacity(0.3) 
+                        : AppColors.divider
+                  ),
                 ),
                 padding: const EdgeInsets.all(16),
-                child: SingleChildScrollView(
-                  child: MarkdownBody(
-                    data: state.result!,
-                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context))
-                        .copyWith(
-                      p: GoogleFonts.dmSans(fontSize: 13, height: 1.6),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: state.status == ScanStatus.error
+                          ? Column(
+                              children: [
+                                const SizedBox(height: 32),
+                                const Icon(Icons.error_outline, color: Colors.red, size: 24),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'ANALYSIS INTERRUPTED',
+                                  style: GoogleFonts.dmSans(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.red,
+                                    letterSpacing: 2,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  (state.result ?? 'Unknown error').replaceFirst('Error: ', '').replaceFirst('ERROR_INTERNAL: ', ''),
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.dmSans(
+                                    fontSize: 12, 
+                                    color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6),
+                                    height: 1.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                GestureDetector(
+                                  onTap: () {
+                                    final pipelines = ref.read(dynamicTraitsProvider).asData?.value ?? [];
+                                    notifier.analyze(pipelines);
+                                  },
+                                  child: Text(
+                                    'TRY AGAIN',
+                                    style: GoogleFonts.dmSans(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.accent,
+                                      letterSpacing: 1.5,
+                                      decoration: TextDecoration.underline,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          : MarkdownBody(
+                              data: state.result!,
+                              selectable: true,
+                              styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context))
+                                  .copyWith(
+                                p: GoogleFonts.dmSans(fontSize: 13, height: 1.6),
+                              ),
+                            ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 12),
+                    _Btn(
+                      label: 'BACK TO HISTORY', 
+                      onTap: () {
+                        debugPrint('ScanScreen: Resetting via button');
+                        notifier.reset();
+                      }
+                    ),
+                  ],
                 ),
               ),
             )
           else
-            _Btn(label: 'ANALYZE', onTap: () => notifier.analyze()),
+            _Btn(
+              label: 'ANALYZE', 
+              onTap: state.selectedTrait == null 
+                ? () {} 
+                : () {
+                    final pipelines = ref.read(dynamicTraitsProvider).asData?.value ?? [];
+                    notifier.analyze(pipelines);
+                  }
+            ),
           const SizedBox(height: 32),
         ],
       ),
@@ -339,12 +499,13 @@ class _ActiveScanOverlay extends ConsumerWidget {
 }
 
 class _HistoryGrid extends ConsumerWidget {
-  final List<ScanResult> history;
-  const _HistoryGrid({required this.history});
+  final List<SavedScan> history;
+  final List<ScanTask> queue;
+  const _HistoryGrid({required this.history, required this.queue});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (history.isEmpty) {
+    if (history.isEmpty && queue.isEmpty) {
       return Center(
         child: Text(
           'CAPTURE TO START',
@@ -354,65 +515,96 @@ class _HistoryGrid extends ConsumerWidget {
       );
     }
 
-    return GridView.builder(
+    final totalCount = history.length + queue.length;
+
+    return ListView.separated(
       padding: const EdgeInsets.all(24),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.8,
-      ),
-      itemCount: history.length,
+      itemCount: totalCount,
+      separatorBuilder: (_, __) => const SizedBox(height: 24),
       itemBuilder: (context, i) {
-        final item = history[i];
+        if (i < queue.length) {
+          return SizedBox(
+            height: 200,
+            child: _QueueCard(task: queue[i]),
+          );
+        }
+        
+        final item = history[i - queue.length];
         return GestureDetector(
           onTap: () => _showDetail(context, item),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
+              Container(
+                width: double.infinity,
+                height: 220,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  border: Border.all(color: AppColors.divider),
+                ),
                 child: Stack(
                   children: [
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: item.imagePath != null
-                          ? (kIsWeb
-                              ? Image.network(item.imagePath!, fit: BoxFit.cover)
-                              : Image.file(File(item.imagePath!), fit: BoxFit.cover))
-                          : const Center(
-                              child: Icon(Icons.image_not_supported_outlined)),
-                    ),
+                    Image.file(File(item.imagePath), fit: BoxFit.cover, width: double.infinity, height: double.infinity),
                     Positioned(
-                      top: 4,
-                      right: 4,
+                      top: 12,
+                      right: 12,
                       child: GestureDetector(
                         onTap: () => ref.read(_scanStateProvider.notifier).deleteHistory(item.date),
                         child: Container(
-                          padding: const EdgeInsets.all(4),
-                          color: Theme.of(context).cardColor.withOpacity(0.8),
-                          child: const Icon(Icons.delete_outline, size: 14, color: Colors.redAccent),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor.withOpacity(0.9),
+                            border: Border.all(color: AppColors.divider),
+                          ),
+                          child: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        color: AppColors.accent.withOpacity(0.9),
+                        child: Text(
+                          item.traitName.toUpperCase(),
+                          style: GoogleFonts.dmSans(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.white,
+                            letterSpacing: 1,
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                DateFormat('MMM d').format(DateTime.parse(item.date)),
-                style: GoogleFonts.dmSans(
-                    fontSize: 9, fontWeight: FontWeight.bold),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    DateFormat('MMMM d, yyyy • HH:mm').format(DateTime.parse(item.date)),
+                    style: GoogleFonts.dmSans(
+                        fontSize: 9, fontWeight: FontWeight.bold, color: AppColors.grey),
+                  ),
+                ],
               ),
+              const SizedBox(height: 12),
               Text(
-                item.result,
-                maxLines: 1,
+                _getPreview(item.result),
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.grey),
+                style: GoogleFonts.dmSans(
+                  fontSize: 13, 
+                  height: 1.5, 
+                  color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.7),
+                ),
               ),
+              const SizedBox(height: 12),
+              const Divider(color: AppColors.divider),
             ],
           ),
         );
@@ -420,7 +612,23 @@ class _HistoryGrid extends ConsumerWidget {
     );
   }
 
-  void _showDetail(BuildContext context, ScanResult item) {
+  String _getPreview(String text) {
+    // Strip markdown headers and bullets
+    String stripped = text
+        .replaceAll(RegExp(r'#+\s*'), '')
+        .replaceAll(RegExp(r'\*\*(.*?)\*\*'), r'$1')
+        .replaceAll(RegExp(r'-\s+'), '')
+        .replaceAll('\n', ' ')
+        .trim();
+    
+    if (stripped.length > 120) {
+      return '${stripped.substring(0, 117)}...';
+    }
+    return stripped;
+  }
+
+  void _showDetail(BuildContext context, SavedScan item) {
+    // (Existing _showDetail logic remains same)
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (ctx) => Scaffold(
@@ -437,19 +645,15 @@ class _HistoryGrid extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               children: [
-                if (item.imagePath != null)
-                  Expanded(
-                    flex: 3,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: kIsWeb
-                          ? Image.network(item.imagePath!, fit: BoxFit.contain)
-                          : Image.file(File(item.imagePath!),
-                              fit: BoxFit.contain),
+                Expanded(
+                  flex: 3,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.divider),
                     ),
+                    child: Image.file(File(item.imagePath), fit: BoxFit.contain),
                   ),
+                ),
                 const SizedBox(height: 24),
                 Expanded(
                   flex: 2,
@@ -458,8 +662,7 @@ class _HistoryGrid extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          DateFormat('MMMM d, h:mm a')
-                              .format(DateTime.parse(item.date)),
+                          '${item.traitId.toUpperCase()} • ${DateFormat('MMMM d, h:mm a').format(DateTime.parse(item.date))}',
                           style: GoogleFonts.dmSans(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
@@ -470,6 +673,7 @@ class _HistoryGrid extends ConsumerWidget {
                         const SizedBox(height: 12),
                         MarkdownBody(
                           data: item.result,
+                          selectable: true,
                           styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(ctx))
                               .copyWith(
                             p: GoogleFonts.dmSans(fontSize: 14, height: 1.6),
@@ -485,6 +689,65 @@ class _HistoryGrid extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _QueueCard extends StatelessWidget {
+  final ScanTask task;
+  const _QueueCard({required this.task});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+            ),
+            child: Stack(
+              children: [
+                Opacity(
+                  opacity: 0.3,
+                  child: Image.file(File(task.localPath), fit: BoxFit.cover, width: double.infinity),
+                ),
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(strokeWidth: 1, color: AppColors.accent),
+                      const SizedBox(height: 12),
+                      Text(
+                        task.status == ScanStatus.queued ? 'QUEUED' : 'ANALYZING',
+                        style: GoogleFonts.dmSans(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.accent,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'JUST NOW',
+          style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.bold),
+        ),
+        Text(
+          task.trait.name.toUpperCase(),
+          maxLines: 1,
+          style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.grey),
+        ),
+      ],
     );
   }
 }
