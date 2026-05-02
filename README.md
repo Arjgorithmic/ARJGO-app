@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="screenshots/banner.png" width="100%" />
+</p>
+
 # ARJGO - Structured Local Intelligence
 
 Arjgo is a minimalist, high-performance Flutter application designed to provide structured intelligence through a specialized Trait Pipeline System. It utilizes local Vision-Language Models (VLM) to analyze images and return actionable, engineered insights directly on your device.
